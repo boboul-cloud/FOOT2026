@@ -13,6 +13,8 @@ struct MatchesView: View {
     @State private var selectedGroup: Group? = nil
     @State private var matchToEdit: Match? = nil
     @State private var searchText = ""
+    @State private var showAutoFillConfirm = false
+    @State private var showClearConfirm = false
 
     private var stages: [Stage] {
         store.matchesByStage.map(\.stage)
@@ -46,6 +48,48 @@ struct MatchesView: View {
             .navigationTitle("Coupe du Monde 2026")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Chercher une équipe…")
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button {
+                            showAutoFillConfirm = true
+                        } label: {
+                            Label("Remplir les matchs passés", systemImage: "wand.and.sparkles")
+                        }
+                        Button(role: .destructive) {
+                            showClearConfirm = true
+                        } label: {
+                            Label("Effacer tous les scores", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                }
+            }
+            .confirmationDialog(
+                "Remplir automatiquement ?",
+                isPresented: $showAutoFillConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Remplir les matchs déjà joués") {
+                    store.autoFillPastMatches()
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Les scores des matchs déjà joués seront générés aléatoirement (matchs sans score uniquement).")
+            }
+            .confirmationDialog(
+                "Effacer tous les scores ?",
+                isPresented: $showClearConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("Tout effacer", role: .destructive) {
+                    store.clearAllScores()
+                }
+                Button("Annuler", role: .cancel) {}
+            } message: {
+                Text("Cette action supprime tous les scores saisis.")
+            }
             .sheet(item: $matchToEdit) { match in
                 ScoreEntryView(match: match)
                     .environment(store)

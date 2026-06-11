@@ -54,6 +54,30 @@ final class MatchStore {
         updateScore(matchID: matchID, home: nil, away: nil)
     }
 
+    /// Auto-fills realistic random scores for all past matches that have no score yet.
+    func autoFillPastMatches() {
+        let now = Date()
+        for idx in matches.indices where matches[idx].date < now && !matches[idx].hasScore {
+            matches[idx].homeScore = randomGoals()
+            matches[idx].awayScore = randomGoals()
+        }
+        save()
+    }
+
+    /// Clears every score in the store.
+    func clearAllScores() {
+        for idx in matches.indices {
+            matches[idx].homeScore = nil
+            matches[idx].awayScore = nil
+        }
+        save()
+    }
+
+    /// Realistic goal distribution: weighted toward low scores.
+    private func randomGoals() -> Int {
+        [0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 3, 3, 4].randomElement()!
+    }
+
     // MARK: - Helpers
 
     var matchesByStage: [(stage: Stage, matches: [Match])] {
