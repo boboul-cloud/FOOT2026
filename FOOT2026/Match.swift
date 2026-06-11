@@ -56,6 +56,23 @@ struct Match: Identifiable, Codable {
         return "\(h) - \(a)"
     }
 
+    /// French broadcasters for this match.
+    /// - beIN Sports broadcasts all 104 matches (pay TV).
+    /// - M6 broadcasts 54 matches free-to-air: opening match, all France group games, all knockout rounds.
+    var broadcasters: [String] {
+        var result: [String] = []
+        // M6 (free): opening match + France group games + all knockout stages
+        let isOpening = homeTeam == "Mexique" && awayTeam == "Afrique du Sud"
+        let involvesBleus = homeTeam == "France" || awayTeam == "France"
+        let isKnockout = stage != .groupStage
+        if isOpening || involvesBleus || isKnockout {
+            result.append("M6")
+        }
+        // beIN Sports: all matches
+        result.append("beIN Sports")
+        return result
+    }
+
     var parisDate: String {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "fr_FR")

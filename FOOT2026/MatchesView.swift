@@ -248,7 +248,7 @@ struct MatchRowView: View {
             .frame(maxWidth: .infinity)
 
             // Score / vs
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 if match.hasScore {
                     Text(match.scoreText)
                         .font(.title3.bold())
@@ -260,6 +260,7 @@ struct MatchRowView: View {
                         .foregroundStyle(.secondary)
                 }
                 groupBadge
+                broadcasterBadges
             }
             .frame(width: 70)
 
@@ -309,6 +310,21 @@ struct MatchRowView: View {
                 .padding(.vertical, 2)
                 .background(Color.accentColor.opacity(0.15), in: Capsule())
                 .foregroundStyle(Color.accentColor)
+        }
+    }
+
+    @ViewBuilder
+    private var broadcasterBadges: some View {
+        HStack(spacing: 3) {
+            ForEach(match.broadcasters, id: \.self) { channel in
+                Text(channel == "beIN Sports" ? "beIN" : channel)
+                    .font(.system(size: 8, weight: .bold))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(channel == "M6" ? Color.orange.opacity(0.85) : Color.green.opacity(0.75),
+                                in: RoundedRectangle(cornerRadius: 3))
+                    .foregroundStyle(.white)
+            }
         }
     }
 }
