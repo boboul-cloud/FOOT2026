@@ -15,6 +15,8 @@ struct MatchesView: View {
     @State private var searchText = ""
     @State private var showAutoFillConfirm = false
     @State private var showClearConfirm = false
+    @State private var isFetching = false
+    @State private var fetchMessage: String? = nil
 
     private var stages: [Stage] {
         store.matchesByStage.map(\.stage)
@@ -54,29 +56,46 @@ struct MatchesView: View {
                         Button {
                             showAutoFillConfirm = true
                         } label: {
-                            Label("Remplir les matchs passés", systemImage: "wand.and.sparkles")
+                            Label("Mettre à jour les scores réels", systemImage: "arrow.clockwise.icloud")
                         }
+                        .disabled(isFetching)
                         Button(role: .destructive) {
                             showClearConfirm = true
                         } label: {
                             Label("Effacer tous les scores", systemImage: "trash")
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        if isFetching {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "ellipsis.circle")
+                        }
                     }
                 }
             }
             .confirmationDialog(
-                "Remplir automatiquement ?",
+                "Charger les scores en ligne ?",
                 isPresented: $showAutoFillConfirm,
                 titleVisibility: .visible
             ) {
-                Button("Remplir les matchs déjà joués") {
-                    store.autoFillPastMatches()
+                Button("Mettre à jour depuis le web") {
+                    Task {
+                        isFetching = true
+                        fetchMessage = nil
+                        do {
+                            let n = try await store.fetchLiveScores()
+                            fetchMessage = n == 0
+                                ? "Aucun nouveau score disponible."
+                                : "\(n) score\(n > 1 ? "s" : "") mis à jour."
+                        } catch {
+                            fetchMessage = "Erreur : \(error.localizedDescription)"
+                        }
+                        isFetching = false
+                    }
                 }
                 Button("Annuler", role: .cancel) {}
             } message: {
-                Text("Les scores des matchs déjà joués seront générés aléatoirement (matchs sans score uniquement).")
+                Text("Les scores officiels des matchs terminés seront récupérés depuis ESPN (connexion internet requise).")
             }
             .confirmationDialog(
                 "Effacer tous les scores ?",
@@ -93,6 +112,12 @@ struct MatchesView: View {
             .sheet(item: $matchToEdit) { match in
                 ScoreEntryView(match: match)
                     .environment(store)
+            }
+            .alert(fetchMessage ?? "", isPresented: Binding(
+                get: { fetchMessage != nil },
+                set: { if !$0 { fetchMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) { fetchMessage = nil }
             }
         }
     }
