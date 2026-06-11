@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct FOOT2026App: App {
+    @State private var store = MatchStore()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(store)
         }
     }
 }
