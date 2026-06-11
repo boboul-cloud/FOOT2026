@@ -1,31 +1,34 @@
 // Match.swift
 // FOOT2026
-// Model for a World Cup 2026 match
+// Official FIFA World Cup 2026 fixture data – source: Wikipedia / FIFA
 
 import Foundation
 
-// MARK: - Group Stage
+// MARK: - Enums
 
 enum Group: String, CaseIterable, Codable {
     case A, B, C, D, E, F, G, H, I, J, K, L
 }
 
 enum Stage: String, Codable, CaseIterable {
-    case groupStage = "Phase de groupes"
-    case roundOf32 = "Huitièmes de finale"
-    case roundOf16 = "Quarts de finale"
-    case semiFinal = "Demi-finales"
-    case thirdPlace = "Match pour la 3e place"
-    case final_ = "Finale"
+    case groupStage   = "group"
+    case roundOf32    = "r32"
+    case roundOf16    = "r16"
+    case quarterFinal = "qf"
+    case semiFinal    = "sf"
+    case thirdPlace   = "3rd"
+    case final_       = "final"
 
     var localizedName: String {
+        let fr = Locale.current.language.languageCode?.identifier == "fr"
         switch self {
-        case .groupStage:  return Locale.current.language.languageCode?.identifier == "fr" ? "Phase de groupes" : "Group Stage"
-        case .roundOf32:   return Locale.current.language.languageCode?.identifier == "fr" ? "Huitièmes de finale" : "Round of 32"
-        case .roundOf16:   return Locale.current.language.languageCode?.identifier == "fr" ? "Quarts de finale" : "Quarter-finals"
-        case .semiFinal:   return Locale.current.language.languageCode?.identifier == "fr" ? "Demi-finales" : "Semi-finals"
-        case .thirdPlace:  return Locale.current.language.languageCode?.identifier == "fr" ? "Match 3e place" : "3rd Place Match"
-        case .final_:      return Locale.current.language.languageCode?.identifier == "fr" ? "Finale" : "Final"
+        case .groupStage:   return fr ? "Phase de groupes"       : "Group Stage"
+        case .roundOf32:    return fr ? "Seizièmes de finale"    : "Round of 32"
+        case .roundOf16:    return fr ? "Huitièmes de finale"    : "Round of 16"
+        case .quarterFinal: return fr ? "Quarts de finale"       : "Quarterfinals"
+        case .semiFinal:    return fr ? "Demi-finales"           : "Semifinals"
+        case .thirdPlace:   return fr ? "3e place"               : "3rd Place"
+        case .final_:       return fr ? "Finale"                 : "Final"
         }
     }
 }
@@ -38,31 +41,13 @@ struct Match: Identifiable, Codable {
     var awayTeam: String
     var homeFlag: String
     var awayFlag: String
-    var date: Date           // stored as UTC, displayed in Europe/Paris
+    var date: Date
     var venue: String
     var city: String
     var stage: Stage
     var group: Group?
     var homeScore: Int?
     var awayScore: Int?
-
-    init(
-        id: UUID = UUID(),
-        homeTeam: String, awayTeam: String,
-        homeFlag: String, awayFlag: String,
-        date: Date,
-        venue: String, city: String,
-        stage: Stage, group: Group? = nil,
-        homeScore: Int? = nil, awayScore: Int? = nil
-    ) {
-        self.id = id
-        self.homeTeam = homeTeam; self.awayTeam = awayTeam
-        self.homeFlag = homeFlag; self.awayFlag = awayFlag
-        self.date = date
-        self.venue = venue; self.city = city
-        self.stage = stage; self.group = group
-        self.homeScore = homeScore; self.awayScore = awayScore
-    }
 
     var hasScore: Bool { homeScore != nil && awayScore != nil }
 
@@ -71,7 +56,6 @@ struct Match: Identifiable, Codable {
         return "\(h) - \(a)"
     }
 
-    // Date formatted for Paris timezone
     var parisDate: String {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "fr_FR")
@@ -90,151 +74,373 @@ struct Match: Identifiable, Codable {
     }
 }
 
-// MARK: - World Cup 2026 fixture data
+// MARK: - Fixture Data (source: Wikipedia / FIFA)
 
 extension Match {
 
-    // Helper: build a Date from day/month/year + hour:min in Paris time
-    private static func parisDate(day: Int, month: Int, year: Int, hour: Int, minute: Int) -> Date {
-        var comps = DateComponents()
-        comps.year = year; comps.month = month; comps.day = day
-        comps.hour = hour; comps.minute = minute
-        comps.timeZone = TimeZone(identifier: "Europe/Paris")
-        return Calendar(identifier: .gregorian).date(from: comps) ?? Date()
+    /// Build a Date from Paris local time (CEST = UTC+2 in summer)
+    private static func parisDate(day: Int, month: Int, year: Int,
+                                  hour: Int, minute: Int) -> Date {
+        var c = DateComponents()
+        c.year = year; c.month = month; c.day = day
+        c.hour = hour; c.minute = minute
+        c.timeZone = TimeZone(identifier: "Europe/Paris")
+        return Calendar(identifier: .gregorian).date(from: c) ?? Date()
     }
 
-    // Full FIFA World Cup 2026 group stage + knockout fixtures
-    // Sources: official FIFA schedule (UTC), converted to Paris (CEST = UTC+2)
+    /// Deterministic UUID from match number (preserves score persistence)
+    private static func mID(_ n: Int) -> UUID {
+        UUID(uuidString: String(format: "00000000-0000-4000-8000-%012d", n))!
+    }
+
     static let allMatches: [Match] = [
 
-        // ── GROUP A ──
-        Match(homeTeam: "Mexique",     awayTeam: "Équateur",     homeFlag: "🇲🇽", awayFlag: "🇪🇨", date: parisDate(day:12,month:6,year:2026,hour:22,minute:0),  venue:"SoFi Stadium",            city:"Los Angeles",     stage:.groupStage, group:.A),
-        Match(homeTeam: "États-Unis",  awayTeam: "Bolivie",      homeFlag: "🇺🇸", awayFlag: "🇧🇴", date: parisDate(day:13,month:6,year:2026,hour:3,minute:0),   venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.A),
-        Match(homeTeam: "États-Unis",  awayTeam: "Équateur",     homeFlag: "🇺🇸", awayFlag: "🇪🇨", date: parisDate(day:17,month:6,year:2026,hour:22,minute:0),  venue:"AT&T Stadium",            city:"Dallas",          stage:.groupStage, group:.A),
-        Match(homeTeam: "Mexique",     awayTeam: "Bolivie",      homeFlag: "🇲🇽", awayFlag: "🇧🇴", date: parisDate(day:18,month:6,year:2026,hour:1,minute:0),   venue:"Empower Field",           city:"Denver",          stage:.groupStage, group:.A),
-        Match(homeTeam: "Équateur",    awayTeam: "Bolivie",      homeFlag: "🇪🇨", awayFlag: "🇧🇴", date: parisDate(day:22,month:6,year:2026,hour:1,minute:0),   venue:"Levi's Stadium",          city:"San Francisco",   stage:.groupStage, group:.A),
-        Match(homeTeam: "États-Unis",  awayTeam: "Mexique",      homeFlag: "🇺🇸", awayFlag: "🇲🇽", date: parisDate(day:22,month:6,year:2026,hour:1,minute:0),   venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.A),
+        // ── GROUPE A : Mexique · Afrique du Sud · Corée du Sud · Tchéquie ──
+        Match(id:mID(1),  homeTeam:"Mexique",        awayTeam:"Afrique du Sud", homeFlag:"🇲🇽", awayFlag:"🇿🇦",
+              date:parisDate(day:11,month:6,year:2026,hour:21,minute:0),
+              venue:"Estadio Azteca",         city:"Mexico City",    stage:.groupStage, group:.A),
+        Match(id:mID(2),  homeTeam:"Corée du Sud",   awayTeam:"Tchéquie",       homeFlag:"🇰🇷", awayFlag:"🇨🇿",
+              date:parisDate(day:12,month:6,year:2026,hour:4,minute:0),
+              venue:"Estadio Akron",          city:"Zapopan",        stage:.groupStage, group:.A),
+        Match(id:mID(25), homeTeam:"Tchéquie",        awayTeam:"Afrique du Sud", homeFlag:"🇨🇿", awayFlag:"🇿🇦",
+              date:parisDate(day:18,month:6,year:2026,hour:18,minute:0),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",        stage:.groupStage, group:.A),
+        Match(id:mID(28), homeTeam:"Mexique",         awayTeam:"Corée du Sud",   homeFlag:"🇲🇽", awayFlag:"🇰🇷",
+              date:parisDate(day:19,month:6,year:2026,hour:3,minute:0),
+              venue:"Estadio Akron",          city:"Zapopan",        stage:.groupStage, group:.A),
+        Match(id:mID(53), homeTeam:"Tchéquie",        awayTeam:"Mexique",        homeFlag:"🇨🇿", awayFlag:"🇲🇽",
+              date:parisDate(day:25,month:6,year:2026,hour:3,minute:0),
+              venue:"Estadio Azteca",         city:"Mexico City",    stage:.groupStage, group:.A),
+        Match(id:mID(54), homeTeam:"Afrique du Sud",  awayTeam:"Corée du Sud",   homeFlag:"🇿🇦", awayFlag:"🇰🇷",
+              date:parisDate(day:25,month:6,year:2026,hour:3,minute:0),
+              venue:"Estadio BBVA",           city:"Guadalupe",      stage:.groupStage, group:.A),
 
-        // ── GROUP B ──
-        Match(homeTeam: "Argentine",   awayTeam: "Albanie",      homeFlag: "🇦🇷", awayFlag: "🇦🇱", date: parisDate(day:13,month:6,year:2026,hour:19,minute:0),  venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.B),
-        Match(homeTeam: "Maroc",       awayTeam: "Irak",         homeFlag: "🇲🇦", awayFlag: "🇮🇶", date: parisDate(day:14,month:6,year:2026,hour:0,minute:0),   venue:"SoFi Stadium",            city:"Los Angeles",     stage:.groupStage, group:.B),
-        Match(homeTeam: "Argentine",   awayTeam: "Irak",         homeFlag: "🇦🇷", awayFlag: "🇮🇶", date: parisDate(day:18,month:6,year:2026,hour:22,minute:0),  venue:"Hard Rock Stadium",       city:"Miami",           stage:.groupStage, group:.B),
-        Match(homeTeam: "Maroc",       awayTeam: "Albanie",      homeFlag: "🇲🇦", awayFlag: "🇦🇱", date: parisDate(day:19,month:6,year:2026,hour:0,minute:0),   venue:"Gillette Stadium",        city:"Boston",          stage:.groupStage, group:.B),
-        Match(homeTeam: "Albanie",     awayTeam: "Irak",         homeFlag: "🇦🇱", awayFlag: "🇮🇶", date: parisDate(day:23,month:6,year:2026,hour:1,minute:0),   venue:"Lincoln Financial Field", city:"Philadelphie",    stage:.groupStage, group:.B),
-        Match(homeTeam: "Argentine",   awayTeam: "Maroc",        homeFlag: "🇦🇷", awayFlag: "🇲🇦", date: parisDate(day:23,month:6,year:2026,hour:1,minute:0),   venue:"Mercedes-Benz Stadium",  city:"Atlanta",         stage:.groupStage, group:.B),
+        // ── GROUPE B : Canada · Bosnie-Herzégovine · Qatar · Suisse ──
+        Match(id:mID(3),  homeTeam:"Canada",           awayTeam:"Bosnie-Herzégovine", homeFlag:"🇨🇦", awayFlag:"🇧🇦",
+              date:parisDate(day:12,month:6,year:2026,hour:21,minute:0),
+              venue:"BMO Field",              city:"Toronto",        stage:.groupStage, group:.B),
+        Match(id:mID(8),  homeTeam:"Qatar",             awayTeam:"Suisse",             homeFlag:"🇶🇦", awayFlag:"🇨🇭",
+              date:parisDate(day:13,month:6,year:2026,hour:21,minute:0),
+              venue:"Levi's Stadium",         city:"Santa Clara",    stage:.groupStage, group:.B),
+        Match(id:mID(26), homeTeam:"Suisse",             awayTeam:"Bosnie-Herzégovine", homeFlag:"🇨🇭", awayFlag:"🇧🇦",
+              date:parisDate(day:18,month:6,year:2026,hour:21,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",      stage:.groupStage, group:.B),
+        Match(id:mID(27), homeTeam:"Canada",             awayTeam:"Qatar",              homeFlag:"🇨🇦", awayFlag:"🇶🇦",
+              date:parisDate(day:19,month:6,year:2026,hour:0,minute:0),
+              venue:"BC Place",               city:"Vancouver",      stage:.groupStage, group:.B),
+        Match(id:mID(51), homeTeam:"Suisse",             awayTeam:"Canada",             homeFlag:"🇨🇭", awayFlag:"🇨🇦",
+              date:parisDate(day:24,month:6,year:2026,hour:21,minute:0),
+              venue:"BC Place",               city:"Vancouver",      stage:.groupStage, group:.B),
+        Match(id:mID(52), homeTeam:"Bosnie-Herzégovine", awayTeam:"Qatar",              homeFlag:"🇧🇦", awayFlag:"🇶🇦",
+              date:parisDate(day:24,month:6,year:2026,hour:21,minute:0),
+              venue:"Lumen Field",            city:"Seattle",        stage:.groupStage, group:.B),
 
-        // ── GROUP C ──
-        Match(homeTeam: "Pays-Bas",    awayTeam: "Yémen",        homeFlag: "🇳🇱", awayFlag: "🇾🇪", date: parisDate(day:13,month:6,year:2026,hour:22,minute:0),  venue:"Levi's Stadium",          city:"San Francisco",   stage:.groupStage, group:.C),
-        Match(homeTeam: "Tchéquie",    awayTeam: "Turquie",      homeFlag: "🇨🇿", awayFlag: "🇹🇷", date: parisDate(day:14,month:6,year:2026,hour:19,minute:0),  venue:"Empower Field",           city:"Denver",          stage:.groupStage, group:.C),
-        Match(homeTeam: "Pays-Bas",    awayTeam: "Turquie",      homeFlag: "🇳🇱", awayFlag: "🇹🇷", date: parisDate(day:18,month:6,year:2026,hour:19,minute:0),  venue:"SoFi Stadium",            city:"Los Angeles",     stage:.groupStage, group:.C),
-        Match(homeTeam: "Tchéquie",    awayTeam: "Yémen",        homeFlag: "🇨🇿", awayFlag: "🇾🇪", date: parisDate(day:18,month:6,year:2026,hour:22,minute:0),  venue:"AT&T Stadium",            city:"Dallas",          stage:.groupStage, group:.C),
-        Match(homeTeam: "Yémen",       awayTeam: "Turquie",      homeFlag: "🇾🇪", awayFlag: "🇹🇷", date: parisDate(day:22,month:6,year:2026,hour:20,minute:0),  venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.C),
-        Match(homeTeam: "Pays-Bas",    awayTeam: "Tchéquie",     homeFlag: "🇳🇱", awayFlag: "🇨🇿", date: parisDate(day:22,month:6,year:2026,hour:20,minute:0),  venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.C),
+        // ── GROUPE C : Brésil · Maroc · Haïti · Écosse ──
+        Match(id:mID(7),  homeTeam:"Brésil",  awayTeam:"Maroc",  homeFlag:"🇧🇷", awayFlag:"🇲🇦",
+              date:parisDate(day:14,month:6,year:2026,hour:0,minute:0),
+              venue:"MetLife Stadium",        city:"East Rutherford", stage:.groupStage, group:.C),
+        Match(id:mID(5),  homeTeam:"Haïti",   awayTeam:"Écosse", homeFlag:"🇭🇹", awayFlag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+              date:parisDate(day:14,month:6,year:2026,hour:3,minute:0),
+              venue:"Gillette Stadium",       city:"Foxborough",    stage:.groupStage, group:.C),
+        Match(id:mID(30), homeTeam:"Écosse",  awayTeam:"Maroc",  homeFlag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", awayFlag:"🇲🇦",
+              date:parisDate(day:20,month:6,year:2026,hour:0,minute:0),
+              venue:"Gillette Stadium",       city:"Foxborough",    stage:.groupStage, group:.C),
+        Match(id:mID(29), homeTeam:"Brésil",  awayTeam:"Haïti",  homeFlag:"🇧🇷", awayFlag:"🇭🇹",
+              date:parisDate(day:20,month:6,year:2026,hour:2,minute:30),
+              venue:"Lincoln Financial Field",city:"Philadelphie",  stage:.groupStage, group:.C),
+        Match(id:mID(49), homeTeam:"Écosse",  awayTeam:"Brésil", homeFlag:"🏴󠁧󠁢󠁳󠁣󠁴󠁿", awayFlag:"🇧🇷",
+              date:parisDate(day:25,month:6,year:2026,hour:0,minute:0),
+              venue:"Hard Rock Stadium",      city:"Miami Gardens", stage:.groupStage, group:.C),
+        Match(id:mID(50), homeTeam:"Maroc",   awayTeam:"Haïti",  homeFlag:"🇲🇦", awayFlag:"🇭🇹",
+              date:parisDate(day:25,month:6,year:2026,hour:0,minute:0),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.groupStage, group:.C),
 
-        // ── GROUP D ──
-        Match(homeTeam: "Brésil",      awayTeam: "Japon",        homeFlag: "🇧🇷", awayFlag: "🇯🇵", date: parisDate(day:14,month:6,year:2026,hour:22,minute:0),  venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.D),
-        Match(homeTeam: "Égypte",      awayTeam: "Malawi",       homeFlag: "🇪🇬", awayFlag: "🇲🇼", date: parisDate(day:15,month:6,year:2026,hour:1,minute:0),   venue:"Lincoln Financial Field", city:"Philadelphie",    stage:.groupStage, group:.D),
-        Match(homeTeam: "Brésil",      awayTeam: "Malawi",       homeFlag: "🇧🇷", awayFlag: "🇲🇼", date: parisDate(day:19,month:6,year:2026,hour:19,minute:0),  venue:"Hard Rock Stadium",       city:"Miami",           stage:.groupStage, group:.D),
-        Match(homeTeam: "Égypte",      awayTeam: "Japon",        homeFlag: "🇪🇬", awayFlag: "🇯🇵", date: parisDate(day:19,month:6,year:2026,hour:22,minute:0),  venue:"Levi's Stadium",          city:"San Francisco",   stage:.groupStage, group:.D),
-        Match(homeTeam: "Japon",       awayTeam: "Malawi",       homeFlag: "🇯🇵", awayFlag: "🇲🇼", date: parisDate(day:23,month:6,year:2026,hour:20,minute:0),  venue:"Empower Field",           city:"Denver",          stage:.groupStage, group:.D),
-        Match(homeTeam: "Brésil",      awayTeam: "Égypte",       homeFlag: "🇧🇷", awayFlag: "🇪🇬", date: parisDate(day:23,month:6,year:2026,hour:20,minute:0),  venue:"SoFi Stadium",            city:"Los Angeles",     stage:.groupStage, group:.D),
+        // ── GROUPE D : États-Unis · Paraguay · Australie · Turquie ──
+        Match(id:mID(4),  homeTeam:"États-Unis", awayTeam:"Paraguay",  homeFlag:"🇺🇸", awayFlag:"🇵🇾",
+              date:parisDate(day:13,month:6,year:2026,hour:3,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",     stage:.groupStage, group:.D),
+        Match(id:mID(6),  homeTeam:"Australie",  awayTeam:"Turquie",   homeFlag:"🇦🇺", awayFlag:"🇹🇷",
+              date:parisDate(day:14,month:6,year:2026,hour:6,minute:0),
+              venue:"BC Place",               city:"Vancouver",     stage:.groupStage, group:.D),
+        Match(id:mID(32), homeTeam:"États-Unis", awayTeam:"Australie", homeFlag:"🇺🇸", awayFlag:"🇦🇺",
+              date:parisDate(day:19,month:6,year:2026,hour:21,minute:0),
+              venue:"Lumen Field",            city:"Seattle",       stage:.groupStage, group:.D),
+        Match(id:mID(31), homeTeam:"Turquie",    awayTeam:"Paraguay",  homeFlag:"🇹🇷", awayFlag:"🇵🇾",
+              date:parisDate(day:20,month:6,year:2026,hour:5,minute:0),
+              venue:"Levi's Stadium",         city:"Santa Clara",   stage:.groupStage, group:.D),
+        Match(id:mID(59), homeTeam:"Turquie",    awayTeam:"États-Unis",homeFlag:"🇹🇷", awayFlag:"🇺🇸",
+              date:parisDate(day:26,month:6,year:2026,hour:4,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",     stage:.groupStage, group:.D),
+        Match(id:mID(60), homeTeam:"Paraguay",   awayTeam:"Australie", homeFlag:"🇵🇾", awayFlag:"🇦🇺",
+              date:parisDate(day:26,month:6,year:2026,hour:4,minute:0),
+              venue:"Levi's Stadium",         city:"Santa Clara",   stage:.groupStage, group:.D),
 
-        // ── GROUP E ──
-        Match(homeTeam: "Allemagne",   awayTeam: "Arabie Saoudite", homeFlag: "🇩🇪", awayFlag: "🇸🇦", date: parisDate(day:15,month:6,year:2026,hour:19,minute:0), venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.E),
-        Match(homeTeam: "Espagne",     awayTeam: "Indonésie",    homeFlag: "🇪🇸", awayFlag: "🇮🇩", date: parisDate(day:15,month:6,year:2026,hour:22,minute:0),  venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.E),
-        Match(homeTeam: "Espagne",     awayTeam: "Arabie Saoudite", homeFlag: "🇪🇸", awayFlag: "🇸🇦", date: parisDate(day:20,month:6,year:2026,hour:0,minute:0), venue:"AT&T Stadium",            city:"Dallas",          stage:.groupStage, group:.E),
-        Match(homeTeam: "Allemagne",   awayTeam: "Indonésie",    homeFlag: "🇩🇪", awayFlag: "🇮🇩", date: parisDate(day:20,month:6,year:2026,hour:22,minute:0),  venue:"Mercedes-Benz Stadium",  city:"Atlanta",         stage:.groupStage, group:.E),
-        Match(homeTeam: "Arabie Saoudite", awayTeam: "Indonésie", homeFlag: "🇸🇦", awayFlag: "🇮🇩", date: parisDate(day:24,month:6,year:2026,hour:1,minute:0), venue:"Gillette Stadium",        city:"Boston",          stage:.groupStage, group:.E),
-        Match(homeTeam: "Espagne",     awayTeam: "Allemagne",    homeFlag: "🇪🇸", awayFlag: "🇩🇪", date: parisDate(day:24,month:6,year:2026,hour:1,minute:0),   venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.E),
+        // ── GROUPE E : Allemagne · Curaçao · Côte d'Ivoire · Équateur ──
+        Match(id:mID(10), homeTeam:"Allemagne",     awayTeam:"Curaçao",        homeFlag:"🇩🇪", awayFlag:"🇨🇼",
+              date:parisDate(day:14,month:6,year:2026,hour:19,minute:0),
+              venue:"NRG Stadium",            city:"Houston",       stage:.groupStage, group:.E),
+        Match(id:mID(9),  homeTeam:"Côte d'Ivoire", awayTeam:"Équateur",       homeFlag:"🇨🇮", awayFlag:"🇪🇨",
+              date:parisDate(day:15,month:6,year:2026,hour:1,minute:0),
+              venue:"Lincoln Financial Field",city:"Philadelphie",  stage:.groupStage, group:.E),
+        Match(id:mID(33), homeTeam:"Allemagne",     awayTeam:"Côte d'Ivoire",  homeFlag:"🇩🇪", awayFlag:"🇨🇮",
+              date:parisDate(day:20,month:6,year:2026,hour:22,minute:0),
+              venue:"BMO Field",              city:"Toronto",       stage:.groupStage, group:.E),
+        Match(id:mID(34), homeTeam:"Équateur",      awayTeam:"Curaçao",        homeFlag:"🇪🇨", awayFlag:"🇨🇼",
+              date:parisDate(day:21,month:6,year:2026,hour:2,minute:0),
+              venue:"Arrowhead Stadium",      city:"Kansas City",   stage:.groupStage, group:.E),
+        Match(id:mID(55), homeTeam:"Curaçao",       awayTeam:"Côte d'Ivoire",  homeFlag:"🇨🇼", awayFlag:"🇨🇮",
+              date:parisDate(day:25,month:6,year:2026,hour:22,minute:0),
+              venue:"Lincoln Financial Field",city:"Philadelphie",  stage:.groupStage, group:.E),
+        Match(id:mID(56), homeTeam:"Équateur",      awayTeam:"Allemagne",      homeFlag:"🇪🇨", awayFlag:"🇩🇪",
+              date:parisDate(day:25,month:6,year:2026,hour:22,minute:0),
+              venue:"MetLife Stadium",        city:"East Rutherford",stage:.groupStage, group:.E),
 
-        // ── GROUP F ──
-        Match(homeTeam: "France",      awayTeam: "Afrique du Sud", homeFlag: "🇫🇷", awayFlag: "🇿🇦", date: parisDate(day:16,month:6,year:2026,hour:0,minute:0),  venue:"Mercedes-Benz Stadium",  city:"Atlanta",         stage:.groupStage, group:.F),
-        Match(homeTeam: "Canada",      awayTeam: "Ukraine",      homeFlag: "🇨🇦", awayFlag: "🇺🇦", date: parisDate(day:15,month:6,year:2026,hour:22,minute:0),  venue:"BC Place",                city:"Vancouver",       stage:.groupStage, group:.F),
-        Match(homeTeam: "France",      awayTeam: "Ukraine",      homeFlag: "🇫🇷", awayFlag: "🇺🇦", date: parisDate(day:20,month:6,year:2026,hour:1,minute:0),   venue:"Lincoln Financial Field", city:"Philadelphie",    stage:.groupStage, group:.F),
-        Match(homeTeam: "Canada",      awayTeam: "Afrique du Sud", homeFlag: "🇨🇦", awayFlag: "🇿🇦", date: parisDate(day:19,month:6,year:2026,hour:19,minute:0), venue:"BC Place",                city:"Vancouver",       stage:.groupStage, group:.F),
-        Match(homeTeam: "Afrique du Sud", awayTeam: "Ukraine",   homeFlag: "🇿🇦", awayFlag: "🇺🇦", date: parisDate(day:24,month:6,year:2026,hour:22,minute:0),  venue:"Hard Rock Stadium",       city:"Miami",           stage:.groupStage, group:.F),
-        Match(homeTeam: "France",      awayTeam: "Canada",       homeFlag: "🇫🇷", awayFlag: "🇨🇦", date: parisDate(day:24,month:6,year:2026,hour:22,minute:0),  venue:"Empower Field",           city:"Denver",          stage:.groupStage, group:.F),
+        // ── GROUPE F : Pays-Bas · Japon · Suède · Tunisie ──
+        Match(id:mID(11), homeTeam:"Pays-Bas", awayTeam:"Japon",   homeFlag:"🇳🇱", awayFlag:"🇯🇵",
+              date:parisDate(day:14,month:6,year:2026,hour:22,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.groupStage, group:.F),
+        Match(id:mID(12), homeTeam:"Suède",    awayTeam:"Tunisie", homeFlag:"🇸🇪", awayFlag:"🇹🇳",
+              date:parisDate(day:15,month:6,year:2026,hour:4,minute:0),
+              venue:"Estadio BBVA",           city:"Guadalupe",     stage:.groupStage, group:.F),
+        Match(id:mID(35), homeTeam:"Pays-Bas", awayTeam:"Suède",   homeFlag:"🇳🇱", awayFlag:"🇸🇪",
+              date:parisDate(day:20,month:6,year:2026,hour:19,minute:0),
+              venue:"NRG Stadium",            city:"Houston",       stage:.groupStage, group:.F),
+        Match(id:mID(36), homeTeam:"Tunisie",  awayTeam:"Japon",   homeFlag:"🇹🇳", awayFlag:"🇯🇵",
+              date:parisDate(day:21,month:6,year:2026,hour:6,minute:0),
+              venue:"Estadio BBVA",           city:"Guadalupe",     stage:.groupStage, group:.F),
+        Match(id:mID(57), homeTeam:"Japon",    awayTeam:"Suède",   homeFlag:"🇯🇵", awayFlag:"🇸🇪",
+              date:parisDate(day:26,month:6,year:2026,hour:1,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.groupStage, group:.F),
+        Match(id:mID(58), homeTeam:"Tunisie",  awayTeam:"Pays-Bas",homeFlag:"🇹🇳", awayFlag:"🇳🇱",
+              date:parisDate(day:26,month:6,year:2026,hour:1,minute:0),
+              venue:"Arrowhead Stadium",      city:"Kansas City",   stage:.groupStage, group:.F),
 
-        // ── GROUP G ──
-        Match(homeTeam: "Angleterre",  awayTeam: "Panama",       homeFlag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", awayFlag: "🇵🇦", date: parisDate(day:16,month:6,year:2026,hour:19,minute:0),  venue:"Empower Field",           city:"Denver",          stage:.groupStage, group:.G),
-        Match(homeTeam: "Sénégal",     awayTeam: "Corée du Sud", homeFlag: "🇸🇳", awayFlag: "🇰🇷", date: parisDate(day:16,month:6,year:2026,hour:22,minute:0),  venue:"AT&T Stadium",            city:"Dallas",          stage:.groupStage, group:.G),
-        Match(homeTeam: "Angleterre",  awayTeam: "Corée du Sud", homeFlag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", awayFlag: "🇰🇷", date: parisDate(day:21,month:6,year:2026,hour:1,minute:0),   venue:"SoFi Stadium",            city:"Los Angeles",     stage:.groupStage, group:.G),
-        Match(homeTeam: "Sénégal",     awayTeam: "Panama",       homeFlag: "🇸🇳", awayFlag: "🇵🇦", date: parisDate(day:20,month:6,year:2026,hour:22,minute:0),  venue:"Gillette Stadium",        city:"Boston",          stage:.groupStage, group:.G),
-        Match(homeTeam: "Corée du Sud", awayTeam: "Panama",      homeFlag: "🇰🇷", awayFlag: "🇵🇦", date: parisDate(day:25,month:6,year:2026,hour:1,minute:0),   venue:"Lincoln Financial Field", city:"Philadelphie",    stage:.groupStage, group:.G),
-        Match(homeTeam: "Angleterre",  awayTeam: "Sénégal",      homeFlag: "🏴󠁧󠁢󠁥󠁮󠁧󠁿", awayFlag: "🇸🇳", date: parisDate(day:25,month:6,year:2026,hour:1,minute:0),   venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.G),
+        // ── GROUPE G : Belgique · Égypte · Iran · Nouvelle-Zélande ──
+        Match(id:mID(16), homeTeam:"Belgique",         awayTeam:"Égypte",          homeFlag:"🇧🇪", awayFlag:"🇪🇬",
+              date:parisDate(day:15,month:6,year:2026,hour:21,minute:0),
+              venue:"Lumen Field",            city:"Seattle",       stage:.groupStage, group:.G),
+        Match(id:mID(15), homeTeam:"Iran",              awayTeam:"Nouvelle-Zélande",homeFlag:"🇮🇷", awayFlag:"🇳🇿",
+              date:parisDate(day:16,month:6,year:2026,hour:3,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",     stage:.groupStage, group:.G),
+        Match(id:mID(39), homeTeam:"Belgique",          awayTeam:"Iran",            homeFlag:"🇧🇪", awayFlag:"🇮🇷",
+              date:parisDate(day:21,month:6,year:2026,hour:21,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",     stage:.groupStage, group:.G),
+        Match(id:mID(40), homeTeam:"Nouvelle-Zélande",  awayTeam:"Égypte",          homeFlag:"🇳🇿", awayFlag:"🇪🇬",
+              date:parisDate(day:22,month:6,year:2026,hour:3,minute:0),
+              venue:"BC Place",               city:"Vancouver",     stage:.groupStage, group:.G),
+        Match(id:mID(63), homeTeam:"Égypte",            awayTeam:"Iran",            homeFlag:"🇪🇬", awayFlag:"🇮🇷",
+              date:parisDate(day:27,month:6,year:2026,hour:5,minute:0),
+              venue:"BC Place",               city:"Vancouver",     stage:.groupStage, group:.G),
+        Match(id:mID(64), homeTeam:"Nouvelle-Zélande",  awayTeam:"Belgique",        homeFlag:"🇳🇿", awayFlag:"🇧🇪",
+              date:parisDate(day:27,month:6,year:2026,hour:5,minute:0),
+              venue:"Lumen Field",            city:"Seattle",       stage:.groupStage, group:.G),
 
-        // ── GROUP H ──
-        Match(homeTeam: "Portugal",    awayTeam: "Mozambique",   homeFlag: "🇵🇹", awayFlag: "🇲🇿", date: parisDate(day:17,month:6,year:2026,hour:1,minute:0),   venue:"AT&T Stadium",            city:"Dallas",          stage:.groupStage, group:.H),
-        Match(homeTeam: "Uruguay",     awayTeam: "Nigéria",      homeFlag: "🇺🇾", awayFlag: "🇳🇬", date: parisDate(day:17,month:6,year:2026,hour:19,minute:0),  venue:"Hard Rock Stadium",       city:"Miami",           stage:.groupStage, group:.H),
-        Match(homeTeam: "Portugal",    awayTeam: "Nigéria",      homeFlag: "🇵🇹", awayFlag: "🇳🇬", date: parisDate(day:21,month:6,year:2026,hour:19,minute:0),  venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.H),
-        Match(homeTeam: "Uruguay",     awayTeam: "Mozambique",   homeFlag: "🇺🇾", awayFlag: "🇲🇿", date: parisDate(day:21,month:6,year:2026,hour:22,minute:0),  venue:"Mercedes-Benz Stadium",  city:"Atlanta",         stage:.groupStage, group:.H),
-        Match(homeTeam: "Nigéria",     awayTeam: "Mozambique",   homeFlag: "🇳🇬", awayFlag: "🇲🇿", date: parisDate(day:25,month:6,year:2026,hour:20,minute:0),  venue:"BC Place",                city:"Vancouver",       stage:.groupStage, group:.H),
-        Match(homeTeam: "Portugal",    awayTeam: "Uruguay",      homeFlag: "🇵🇹", awayFlag: "🇺🇾", date: parisDate(day:25,month:6,year:2026,hour:20,minute:0),  venue:"Empower Field",           city:"Denver",          stage:.groupStage, group:.H),
+        // ── GROUPE H : Espagne · Cap-Vert · Arabie Saoudite · Uruguay ──
+        Match(id:mID(14), homeTeam:"Espagne",         awayTeam:"Cap-Vert",        homeFlag:"🇪🇸", awayFlag:"🇨🇻",
+              date:parisDate(day:15,month:6,year:2026,hour:18,minute:0),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.groupStage, group:.H),
+        Match(id:mID(13), homeTeam:"Arabie Saoudite", awayTeam:"Uruguay",          homeFlag:"🇸🇦", awayFlag:"🇺🇾",
+              date:parisDate(day:16,month:6,year:2026,hour:0,minute:0),
+              venue:"Hard Rock Stadium",      city:"Miami Gardens", stage:.groupStage, group:.H),
+        Match(id:mID(38), homeTeam:"Espagne",         awayTeam:"Arabie Saoudite",  homeFlag:"🇪🇸", awayFlag:"🇸🇦",
+              date:parisDate(day:21,month:6,year:2026,hour:18,minute:0),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.groupStage, group:.H),
+        Match(id:mID(37), homeTeam:"Uruguay",         awayTeam:"Cap-Vert",         homeFlag:"🇺🇾", awayFlag:"🇨🇻",
+              date:parisDate(day:22,month:6,year:2026,hour:0,minute:0),
+              venue:"Hard Rock Stadium",      city:"Miami Gardens", stage:.groupStage, group:.H),
+        Match(id:mID(65), homeTeam:"Cap-Vert",        awayTeam:"Arabie Saoudite",  homeFlag:"🇨🇻", awayFlag:"🇸🇦",
+              date:parisDate(day:27,month:6,year:2026,hour:2,minute:0),
+              venue:"NRG Stadium",            city:"Houston",       stage:.groupStage, group:.H),
+        Match(id:mID(66), homeTeam:"Uruguay",         awayTeam:"Espagne",          homeFlag:"🇺🇾", awayFlag:"🇪🇸",
+              date:parisDate(day:27,month:6,year:2026,hour:2,minute:0),
+              venue:"Estadio Akron",          city:"Zapopan",       stage:.groupStage, group:.H),
 
-        // ── GROUP I ──
-        Match(homeTeam: "Italie",      awayTeam: "Bangladesh",   homeFlag: "🇮🇹", awayFlag: "🇧🇩", date: parisDate(day:17,month:6,year:2026,hour:22,minute:0),  venue:"Levi's Stadium",          city:"San Francisco",   stage:.groupStage, group:.I),
-        Match(homeTeam: "Mexique",     awayTeam: "Cameroun",     homeFlag: "🇲🇽", awayFlag: "🇨🇲", date: parisDate(day:18,month:6,year:2026,hour:3,minute:0),   venue:"Gillette Stadium",        city:"Boston",          stage:.groupStage, group:.I),
-        Match(homeTeam: "Italie",      awayTeam: "Cameroun",     homeFlag: "🇮🇹", awayFlag: "🇨🇲", date: parisDate(day:22,month:6,year:2026,hour:22,minute:0),  venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.I),
-        Match(homeTeam: "Mexique",     awayTeam: "Bangladesh",   homeFlag: "🇲🇽", awayFlag: "🇧🇩", date: parisDate(day:22,month:6,year:2026,hour:19,minute:0),  venue:"Lincoln Financial Field", city:"Philadelphie",    stage:.groupStage, group:.I),
-        Match(homeTeam: "Cameroun",    awayTeam: "Bangladesh",   homeFlag: "🇨🇲", awayFlag: "🇧🇩", date: parisDate(day:26,month:6,year:2026,hour:20,minute:0),  venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.I),
-        Match(homeTeam: "Italie",      awayTeam: "Mexique",      homeFlag: "🇮🇹", awayFlag: "🇲🇽", date: parisDate(day:26,month:6,year:2026,hour:20,minute:0),  venue:"AT&T Stadium",            city:"Dallas",          stage:.groupStage, group:.I),
+        // ── GROUPE I : France · Sénégal · Irak · Norvège ──
+        Match(id:mID(17), homeTeam:"France",  awayTeam:"Sénégal", homeFlag:"🇫🇷", awayFlag:"🇸🇳",
+              date:parisDate(day:16,month:6,year:2026,hour:21,minute:0),
+              venue:"MetLife Stadium",        city:"East Rutherford",stage:.groupStage, group:.I),
+        Match(id:mID(18), homeTeam:"Irak",    awayTeam:"Norvège",  homeFlag:"🇮🇶", awayFlag:"🇳🇴",
+              date:parisDate(day:17,month:6,year:2026,hour:0,minute:0),
+              venue:"Gillette Stadium",       city:"Foxborough",    stage:.groupStage, group:.I),
+        Match(id:mID(42), homeTeam:"France",  awayTeam:"Irak",     homeFlag:"🇫🇷", awayFlag:"🇮🇶",
+              date:parisDate(day:22,month:6,year:2026,hour:23,minute:0),
+              venue:"Lincoln Financial Field",city:"Philadelphie",  stage:.groupStage, group:.I),
+        Match(id:mID(41), homeTeam:"Norvège", awayTeam:"Sénégal",  homeFlag:"🇳🇴", awayFlag:"🇸🇳",
+              date:parisDate(day:23,month:6,year:2026,hour:2,minute:0),
+              venue:"MetLife Stadium",        city:"East Rutherford",stage:.groupStage, group:.I),
+        Match(id:mID(61), homeTeam:"Norvège", awayTeam:"France",   homeFlag:"🇳🇴", awayFlag:"🇫🇷",
+              date:parisDate(day:26,month:6,year:2026,hour:21,minute:0),
+              venue:"Gillette Stadium",       city:"Foxborough",    stage:.groupStage, group:.I),
+        Match(id:mID(62), homeTeam:"Sénégal", awayTeam:"Irak",     homeFlag:"🇸🇳", awayFlag:"🇮🇶",
+              date:parisDate(day:26,month:6,year:2026,hour:21,minute:0),
+              venue:"BMO Field",              city:"Toronto",       stage:.groupStage, group:.I),
 
-        // ── GROUP J ──
-        Match(homeTeam: "Belgique",    awayTeam: "Congo",        homeFlag: "🇧🇪", awayFlag: "🇨🇩", date: parisDate(day:18,month:6,year:2026,hour:19,minute:0),  venue:"Hard Rock Stadium",       city:"Miami",           stage:.groupStage, group:.J),
-        Match(homeTeam: "Croatie",     awayTeam: "Venezuela",    homeFlag: "🇭🇷", awayFlag: "🇻🇪", date: parisDate(day:18,month:6,year:2026,hour:22,minute:0),  venue:"SoFi Stadium",            city:"Los Angeles",     stage:.groupStage, group:.J),
-        Match(homeTeam: "Belgique",    awayTeam: "Venezuela",    homeFlag: "🇧🇪", awayFlag: "🇻🇪", date: parisDate(day:23,month:6,year:2026,hour:19,minute:0),  venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.J),
-        Match(homeTeam: "Croatie",     awayTeam: "Congo",        homeFlag: "🇭🇷", awayFlag: "🇨🇩", date: parisDate(day:23,month:6,year:2026,hour:22,minute:0),  venue:"Empower Field",           city:"Denver",          stage:.groupStage, group:.J),
-        Match(homeTeam: "Congo",       awayTeam: "Venezuela",    homeFlag: "🇨🇩", awayFlag: "🇻🇪", date: parisDate(day:27,month:6,year:2026,hour:20,minute:0),  venue:"Mercedes-Benz Stadium",  city:"Atlanta",         stage:.groupStage, group:.J),
-        Match(homeTeam: "Belgique",    awayTeam: "Croatie",      homeFlag: "🇧🇪", awayFlag: "🇭🇷", date: parisDate(day:27,month:6,year:2026,hour:20,minute:0),  venue:"AT&T Stadium",            city:"Dallas",          stage:.groupStage, group:.J),
+        // ── GROUPE J : Argentine · Algérie · Autriche · Jordanie ──
+        Match(id:mID(19), homeTeam:"Argentine", awayTeam:"Algérie",  homeFlag:"🇦🇷", awayFlag:"🇩🇿",
+              date:parisDate(day:17,month:6,year:2026,hour:3,minute:0),
+              venue:"Arrowhead Stadium",      city:"Kansas City",   stage:.groupStage, group:.J),
+        Match(id:mID(20), homeTeam:"Autriche",  awayTeam:"Jordanie", homeFlag:"🇦🇹", awayFlag:"🇯🇴",
+              date:parisDate(day:17,month:6,year:2026,hour:6,minute:0),
+              venue:"Levi's Stadium",         city:"Santa Clara",   stage:.groupStage, group:.J),
+        Match(id:mID(43), homeTeam:"Argentine", awayTeam:"Autriche", homeFlag:"🇦🇷", awayFlag:"🇦🇹",
+              date:parisDate(day:22,month:6,year:2026,hour:19,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.groupStage, group:.J),
+        Match(id:mID(44), homeTeam:"Jordanie",  awayTeam:"Algérie",  homeFlag:"🇯🇴", awayFlag:"🇩🇿",
+              date:parisDate(day:23,month:6,year:2026,hour:5,minute:0),
+              venue:"Levi's Stadium",         city:"Santa Clara",   stage:.groupStage, group:.J),
+        Match(id:mID(69), homeTeam:"Algérie",   awayTeam:"Autriche", homeFlag:"🇩🇿", awayFlag:"🇦🇹",
+              date:parisDate(day:28,month:6,year:2026,hour:4,minute:0),
+              venue:"Arrowhead Stadium",      city:"Kansas City",   stage:.groupStage, group:.J),
+        Match(id:mID(70), homeTeam:"Jordanie",  awayTeam:"Argentine",homeFlag:"🇯🇴", awayFlag:"🇦🇷",
+              date:parisDate(day:28,month:6,year:2026,hour:4,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.groupStage, group:.J),
 
-        // ── GROUP K ──
-        Match(homeTeam: "Autriche",    awayTeam: "Chili",        homeFlag: "🇦🇹", awayFlag: "🇨🇱", date: parisDate(day:19,month:6,year:2026,hour:1,minute:0),   venue:"MetLife Stadium",         city:"New York",        stage:.groupStage, group:.K),
-        Match(homeTeam: "Serbite",     awayTeam: "Philippines",  homeFlag: "🇷🇸", awayFlag: "🇵🇭", date: parisDate(day:19,month:6,year:2026,hour:0,minute:0),   venue:"Levi's Stadium",          city:"San Francisco",   stage:.groupStage, group:.K),
-        Match(homeTeam: "Autriche",    awayTeam: "Philippines",  homeFlag: "🇦🇹", awayFlag: "🇵🇭", date: parisDate(day:23,month:6,year:2026,hour:22,minute:0),  venue:"Gillette Stadium",        city:"Boston",          stage:.groupStage, group:.K),
-        Match(homeTeam: "Serbite",     awayTeam: "Chili",        homeFlag: "🇷🇸", awayFlag: "🇨🇱", date: parisDate(day:23,month:6,year:2026,hour:19,minute:0),  venue:"Hard Rock Stadium",       city:"Miami",           stage:.groupStage, group:.K),
-        Match(homeTeam: "Chili",       awayTeam: "Philippines",  homeFlag: "🇨🇱", awayFlag: "🇵🇭", date: parisDate(day:27,month:6,year:2026,hour:1,minute:0),   venue:"SoFi Stadium",            city:"Los Angeles",     stage:.groupStage, group:.K),
-        Match(homeTeam: "Autriche",    awayTeam: "Serbite",      homeFlag: "🇦🇹", awayFlag: "🇷🇸", date: parisDate(day:27,month:6,year:2026,hour:1,minute:0),   venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.K),
+        // ── GROUPE K : Portugal · RD Congo · Ouzbékistan · Colombie ──
+        Match(id:mID(23), homeTeam:"Portugal",    awayTeam:"RD Congo",     homeFlag:"🇵🇹", awayFlag:"🇨🇩",
+              date:parisDate(day:17,month:6,year:2026,hour:19,minute:0),
+              venue:"NRG Stadium",            city:"Houston",       stage:.groupStage, group:.K),
+        Match(id:mID(24), homeTeam:"Ouzbékistan", awayTeam:"Colombie",     homeFlag:"🇺🇿", awayFlag:"🇨🇴",
+              date:parisDate(day:18,month:6,year:2026,hour:4,minute:0),
+              venue:"Estadio Azteca",         city:"Mexico City",   stage:.groupStage, group:.K),
+        Match(id:mID(47), homeTeam:"Portugal",    awayTeam:"Ouzbékistan",  homeFlag:"🇵🇹", awayFlag:"🇺🇿",
+              date:parisDate(day:23,month:6,year:2026,hour:19,minute:0),
+              venue:"NRG Stadium",            city:"Houston",       stage:.groupStage, group:.K),
+        Match(id:mID(48), homeTeam:"Colombie",    awayTeam:"RD Congo",     homeFlag:"🇨🇴", awayFlag:"🇨🇩",
+              date:parisDate(day:24,month:6,year:2026,hour:4,minute:0),
+              venue:"Estadio Akron",          city:"Zapopan",       stage:.groupStage, group:.K),
+        Match(id:mID(71), homeTeam:"Colombie",    awayTeam:"Portugal",     homeFlag:"🇨🇴", awayFlag:"🇵🇹",
+              date:parisDate(day:28,month:6,year:2026,hour:1,minute:30),
+              venue:"Hard Rock Stadium",      city:"Miami Gardens", stage:.groupStage, group:.K),
+        Match(id:mID(72), homeTeam:"RD Congo",    awayTeam:"Ouzbékistan",  homeFlag:"🇨🇩", awayFlag:"🇺🇿",
+              date:parisDate(day:28,month:6,year:2026,hour:1,minute:30),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.groupStage, group:.K),
 
-        // ── GROUP L ──
-        Match(homeTeam: "Côte d'Ivoire", awayTeam: "Mexique",   homeFlag: "🇨🇮", awayFlag: "🇲🇽", date: parisDate(day:20,month:6,year:2026,hour:3,minute:0),   venue:"Lincoln Financial Field", city:"Philadelphie",    stage:.groupStage, group:.L),
-        Match(homeTeam: "Australie",   awayTeam: "Serbie",       homeFlag: "🇦🇺", awayFlag: "🇷🇸", date: parisDate(day:19,month:6,year:2026,hour:22,minute:0),  venue:"BC Place",                city:"Vancouver",       stage:.groupStage, group:.L),
-        Match(homeTeam: "Côte d'Ivoire", awayTeam: "Serbie",    homeFlag: "🇨🇮", awayFlag: "🇷🇸", date: parisDate(day:24,month:6,year:2026,hour:19,minute:0),  venue:"Mercedes-Benz Stadium",  city:"Atlanta",         stage:.groupStage, group:.L),
-        Match(homeTeam: "Australie",   awayTeam: "Mexique",      homeFlag: "🇦🇺", awayFlag: "🇲🇽", date: parisDate(day:24,month:6,year:2026,hour:3,minute:0),   venue:"Rose Bowl",               city:"Los Angeles",     stage:.groupStage, group:.L),
-        Match(homeTeam: "Serbie",      awayTeam: "Mexique",      homeFlag: "🇷🇸", awayFlag: "🇲🇽", date: parisDate(day:28,month:6,year:2026,hour:20,minute:0),  venue:"Hard Rock Stadium",       city:"Miami",           stage:.groupStage, group:.L),
-        Match(homeTeam: "Côte d'Ivoire", awayTeam: "Australie", homeFlag: "🇨🇮", awayFlag: "🇦🇺", date: parisDate(day:28,month:6,year:2026,hour:20,minute:0),  venue:"Gillette Stadium",        city:"Boston",          stage:.groupStage, group:.L),
+        // ── GROUPE L : Angleterre · Croatie · Ghana · Panama ──
+        Match(id:mID(22), homeTeam:"Angleterre", awayTeam:"Croatie", homeFlag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", awayFlag:"🇭🇷",
+              date:parisDate(day:17,month:6,year:2026,hour:22,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.groupStage, group:.L),
+        Match(id:mID(21), homeTeam:"Ghana",      awayTeam:"Panama",  homeFlag:"🇬🇭", awayFlag:"🇵🇦",
+              date:parisDate(day:18,month:6,year:2026,hour:1,minute:0),
+              venue:"BMO Field",              city:"Toronto",       stage:.groupStage, group:.L),
+        Match(id:mID(45), homeTeam:"Angleterre", awayTeam:"Ghana",   homeFlag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿", awayFlag:"🇬🇭",
+              date:parisDate(day:23,month:6,year:2026,hour:22,minute:0),
+              venue:"Gillette Stadium",       city:"Foxborough",    stage:.groupStage, group:.L),
+        Match(id:mID(46), homeTeam:"Panama",     awayTeam:"Croatie", homeFlag:"🇵🇦", awayFlag:"🇭🇷",
+              date:parisDate(day:24,month:6,year:2026,hour:1,minute:0),
+              venue:"BMO Field",              city:"Toronto",       stage:.groupStage, group:.L),
+        Match(id:mID(67), homeTeam:"Panama",     awayTeam:"Angleterre",homeFlag:"🇵🇦", awayFlag:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",
+              date:parisDate(day:27,month:6,year:2026,hour:23,minute:0),
+              venue:"MetLife Stadium",        city:"East Rutherford",stage:.groupStage, group:.L),
+        Match(id:mID(68), homeTeam:"Croatie",    awayTeam:"Ghana",   homeFlag:"🇭🇷", awayFlag:"🇬🇭",
+              date:parisDate(day:27,month:6,year:2026,hour:23,minute:0),
+              venue:"Lincoln Financial Field",city:"Philadelphie",  stage:.groupStage, group:.L),
 
-        // ── ROUND OF 32 (32 matchs - placeholders avec dates officielles) ──
-        Match(homeTeam: "1A",  awayTeam: "3D/E/F", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:30,month:6,year:2026,hour:19,minute:0),  venue:"MetLife Stadium",         city:"New York",        stage:.roundOf32),
-        Match(homeTeam: "1C",  awayTeam: "3A/B",   homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:30,month:6,year:2026,hour:22,minute:0),  venue:"AT&T Stadium",            city:"Dallas",          stage:.roundOf32),
-        Match(homeTeam: "1B",  awayTeam: "3G/H/I", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:1,month:7,year:2026,hour:1,minute:0),    venue:"Rose Bowl",               city:"Los Angeles",     stage:.roundOf32),
-        Match(homeTeam: "1D",  awayTeam: "2C",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:1,month:7,year:2026,hour:19,minute:0),   venue:"Empower Field",           city:"Denver",          stage:.roundOf32),
-        Match(homeTeam: "1E",  awayTeam: "3J/K/L", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:1,month:7,year:2026,hour:22,minute:0),   venue:"Levi's Stadium",          city:"San Francisco",   stage:.roundOf32),
-        Match(homeTeam: "1F",  awayTeam: "2E",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:2,month:7,year:2026,hour:1,minute:0),    venue:"Hard Rock Stadium",       city:"Miami",           stage:.roundOf32),
-        Match(homeTeam: "1G",  awayTeam: "2F",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:2,month:7,year:2026,hour:19,minute:0),   venue:"Gillette Stadium",        city:"Boston",          stage:.roundOf32),
-        Match(homeTeam: "1H",  awayTeam: "2G",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:2,month:7,year:2026,hour:22,minute:0),   venue:"Lincoln Financial Field", city:"Philadelphie",    stage:.roundOf32),
-        Match(homeTeam: "1I",  awayTeam: "2H",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:3,month:7,year:2026,hour:1,minute:0),    venue:"Mercedes-Benz Stadium",  city:"Atlanta",         stage:.roundOf32),
-        Match(homeTeam: "1J",  awayTeam: "2I",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:3,month:7,year:2026,hour:19,minute:0),   venue:"BC Place",                city:"Vancouver",       stage:.roundOf32),
-        Match(homeTeam: "1K",  awayTeam: "2J",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:3,month:7,year:2026,hour:22,minute:0),   venue:"SoFi Stadium",            city:"Los Angeles",     stage:.roundOf32),
-        Match(homeTeam: "1L",  awayTeam: "2K",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:4,month:7,year:2026,hour:1,minute:0),    venue:"MetLife Stadium",         city:"New York",        stage:.roundOf32),
-        Match(homeTeam: "2A",  awayTeam: "2B",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:4,month:7,year:2026,hour:19,minute:0),   venue:"AT&T Stadium",            city:"Dallas",          stage:.roundOf32),
-        Match(homeTeam: "2D",  awayTeam: "2L",     homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:4,month:7,year:2026,hour:22,minute:0),   venue:"Hard Rock Stadium",       city:"Miami",           stage:.roundOf32),
-        Match(homeTeam: "3C/D", awayTeam: "3H/I",  homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:5,month:7,year:2026,hour:1,minute:0),    venue:"Rose Bowl",               city:"Los Angeles",     stage:.roundOf32),
-        Match(homeTeam: "3A/B", awayTeam: "3F/G",  homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:5,month:7,year:2026,hour:19,minute:0),   venue:"Empower Field",           city:"Denver",          stage:.roundOf32),
+        // ── SEIZIÈMES DE FINALE ──
+        Match(id:mID(73),  homeTeam:"2e Gr.A",         awayTeam:"2e Gr.B",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:28,month:6,year:2026,hour:21,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",     stage:.roundOf32),
+        Match(id:mID(76),  homeTeam:"1er Gr.C",        awayTeam:"2e Gr.F",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:29,month:6,year:2026,hour:19,minute:0),
+              venue:"NRG Stadium",            city:"Houston",       stage:.roundOf32),
+        Match(id:mID(74),  homeTeam:"1er Gr.E",        awayTeam:"3e (A/B/C/D/F)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:29,month:6,year:2026,hour:22,minute:30),
+              venue:"Gillette Stadium",       city:"Foxborough",    stage:.roundOf32),
+        Match(id:mID(75),  homeTeam:"1er Gr.F",        awayTeam:"2e Gr.C",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:30,month:6,year:2026,hour:3,minute:0),
+              venue:"Estadio BBVA",           city:"Guadalupe",     stage:.roundOf32),
+        Match(id:mID(78),  homeTeam:"2e Gr.E",         awayTeam:"2e Gr.I",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:30,month:6,year:2026,hour:19,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.roundOf32),
+        Match(id:mID(77),  homeTeam:"1er Gr.I",        awayTeam:"3e (C/D/F/G/H)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:30,month:6,year:2026,hour:23,minute:0),
+              venue:"MetLife Stadium",        city:"East Rutherford",stage:.roundOf32),
+        Match(id:mID(79),  homeTeam:"1er Gr.A",        awayTeam:"3e (C/E/F/H/I)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:1,month:7,year:2026,hour:3,minute:0),
+              venue:"Estadio Azteca",         city:"Mexico City",   stage:.roundOf32),
+        Match(id:mID(80),  homeTeam:"1er Gr.L",        awayTeam:"3e (E/H/I/J/K)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:1,month:7,year:2026,hour:18,minute:0),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.roundOf32),
+        Match(id:mID(82),  homeTeam:"1er Gr.G",        awayTeam:"3e (A/E/H/I/J)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:1,month:7,year:2026,hour:21,minute:0),
+              venue:"Lumen Field",            city:"Seattle",       stage:.roundOf32),
+        Match(id:mID(81),  homeTeam:"1er Gr.D",        awayTeam:"3e (B/E/F/I/J)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:2,month:7,year:2026,hour:0,minute:0),
+              venue:"Lumen Field",            city:"Seattle",       stage:.roundOf32),
+        Match(id:mID(84),  homeTeam:"1er Gr.H",        awayTeam:"2e Gr.J",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:2,month:7,year:2026,hour:21,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",     stage:.roundOf32),
+        Match(id:mID(83),  homeTeam:"2e Gr.K",         awayTeam:"2e Gr.L",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:3,month:7,year:2026,hour:1,minute:0),
+              venue:"BMO Field",              city:"Toronto",       stage:.roundOf32),
+        Match(id:mID(85),  homeTeam:"1er Gr.B",        awayTeam:"3e (E/F/G/I/J)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:3,month:7,year:2026,hour:3,minute:0),
+              venue:"BC Place",               city:"Vancouver",     stage:.roundOf32),
+        Match(id:mID(88),  homeTeam:"2e Gr.D",         awayTeam:"2e Gr.G",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:3,month:7,year:2026,hour:19,minute:0),
+              venue:"BC Place",               city:"Vancouver",     stage:.roundOf32),
+        Match(id:mID(86),  homeTeam:"1er Gr.J",        awayTeam:"2e Gr.H",          homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:4,month:7,year:2026,hour:0,minute:0),
+              venue:"Hard Rock Stadium",      city:"Miami Gardens", stage:.roundOf32),
+        Match(id:mID(87),  homeTeam:"1er Gr.K",        awayTeam:"3e (D/E/I/J/L)",   homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:4,month:7,year:2026,hour:2,minute:30),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.roundOf32),
 
-        // ── QUARTER-FINALS ──
-        Match(homeTeam: "QF1-1", awayTeam: "QF1-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:10,month:7,year:2026,hour:22,minute:0), venue:"MetLife Stadium",         city:"New York",       stage:.roundOf16),
-        Match(homeTeam: "QF2-1", awayTeam: "QF2-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:11,month:7,year:2026,hour:22,minute:0), venue:"AT&T Stadium",            city:"Dallas",         stage:.roundOf16),
-        Match(homeTeam: "QF3-1", awayTeam: "QF3-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:12,month:7,year:2026,hour:22,minute:0), venue:"Rose Bowl",               city:"Los Angeles",    stage:.roundOf16),
-        Match(homeTeam: "QF4-1", awayTeam: "QF4-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:13,month:7,year:2026,hour:22,minute:0), venue:"SoFi Stadium",            city:"Los Angeles",    stage:.roundOf16),
+        // ── HUITIÈMES DE FINALE ──
+        Match(id:mID(90),  homeTeam:"V.M73", awayTeam:"V.M75", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:4,month:7,year:2026,hour:19,minute:0),
+              venue:"NRG Stadium",            city:"Houston",       stage:.roundOf16),
+        Match(id:mID(89),  homeTeam:"V.M74", awayTeam:"V.M77", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:4,month:7,year:2026,hour:23,minute:0),
+              venue:"Lincoln Financial Field",city:"Philadelphie",  stage:.roundOf16),
+        Match(id:mID(91),  homeTeam:"V.M76", awayTeam:"V.M78", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:5,month:7,year:2026,hour:22,minute:0),
+              venue:"Lincoln Financial Field",city:"Philadelphie",  stage:.roundOf16),
+        Match(id:mID(92),  homeTeam:"V.M79", awayTeam:"V.M80", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:6,month:7,year:2026,hour:2,minute:0),
+              venue:"Estadio Azteca",         city:"Mexico City",   stage:.roundOf16),
+        Match(id:mID(93),  homeTeam:"V.M83", awayTeam:"V.M84", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:6,month:7,year:2026,hour:20,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.roundOf16),
+        Match(id:mID(94),  homeTeam:"V.M81", awayTeam:"V.M82", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:7,month:7,year:2026,hour:0,minute:0),
+              venue:"Lumen Field",            city:"Seattle",       stage:.roundOf16),
+        Match(id:mID(95),  homeTeam:"V.M86", awayTeam:"V.M88", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:7,month:7,year:2026,hour:18,minute:0),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.roundOf16),
+        Match(id:mID(96),  homeTeam:"V.M85", awayTeam:"V.M87", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:7,month:7,year:2026,hour:21,minute:0),
+              venue:"BC Place",               city:"Vancouver",     stage:.roundOf16),
 
-        // ── SEMI-FINALS ──
-        Match(homeTeam: "SF1-1", awayTeam: "SF1-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:19,month:7,year:2026,hour:22,minute:0), venue:"MetLife Stadium",         city:"New York",       stage:.semiFinal),
-        Match(homeTeam: "SF2-1", awayTeam: "SF2-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:22,month:7,year:2026,hour:22,minute:0), venue:"Rose Bowl",               city:"Los Angeles",    stage:.semiFinal),
+        // ── QUARTS DE FINALE ──
+        Match(id:mID(97),  homeTeam:"V.M89", awayTeam:"V.M90", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:9,month:7,year:2026,hour:22,minute:0),
+              venue:"Gillette Stadium",       city:"Foxborough",    stage:.quarterFinal),
+        Match(id:mID(98),  homeTeam:"V.M93", awayTeam:"V.M94", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:10,month:7,year:2026,hour:21,minute:0),
+              venue:"SoFi Stadium",           city:"Inglewood",     stage:.quarterFinal),
+        Match(id:mID(99),  homeTeam:"V.M91", awayTeam:"V.M92", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:11,month:7,year:2026,hour:23,minute:0),
+              venue:"Hard Rock Stadium",      city:"Miami Gardens", stage:.quarterFinal),
+        Match(id:mID(100), homeTeam:"V.M95", awayTeam:"V.M96", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:12,month:7,year:2026,hour:2,minute:0),
+              venue:"Arrowhead Stadium",      city:"Kansas City",   stage:.quarterFinal),
 
-        // ── 3RD PLACE ──
-        Match(homeTeam: "3PL-1", awayTeam: "3PL-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:25,month:7,year:2026,hour:22,minute:0), venue:"Hard Rock Stadium",       city:"Miami",          stage:.thirdPlace),
+        // ── DEMI-FINALES ──
+        Match(id:mID(101), homeTeam:"V.M97",  awayTeam:"V.M98",  homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:14,month:7,year:2026,hour:21,minute:0),
+              venue:"AT&T Stadium",           city:"Arlington",     stage:.semiFinal),
+        Match(id:mID(102), homeTeam:"V.M99",  awayTeam:"V.M100", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:15,month:7,year:2026,hour:21,minute:0),
+              venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.semiFinal),
 
-        // ── FINAL ──
-        Match(homeTeam: "FIN-1", awayTeam: "FIN-2", homeFlag: "🏳️", awayFlag: "🏳️", date: parisDate(day:19,month:7,year:2026,hour:22,minute:0), venue:"MetLife Stadium",         city:"New York",       stage:.final_),
+        // ── 3E PLACE ──
+        Match(id:mID(103), homeTeam:"P.M101", awayTeam:"P.M102", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:18,month:7,year:2026,hour:23,minute:0),
+              venue:"Hard Rock Stadium",      city:"Miami Gardens", stage:.thirdPlace),
+
+        // ── FINALE ──
+        Match(id:mID(104), homeTeam:"V.M101", awayTeam:"V.M102", homeFlag:"🏳️",awayFlag:"🏳️",
+              date:parisDate(day:19,month:7,year:2026,hour:21,minute:0),
+              venue:"MetLife Stadium",        city:"East Rutherford",stage:.final_),
     ]
 }

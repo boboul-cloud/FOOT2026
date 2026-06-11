@@ -219,7 +219,7 @@ struct MatchRowView: View {
 
     private var dayNumber: String {
         let cal = Calendar(identifier: .gregorian)
-        var comps = cal.dateComponents(in: TimeZone(identifier: "Europe/Paris")!, from: match.date)
+        let comps = cal.dateComponents(in: TimeZone(identifier: "Europe/Paris")!, from: match.date)
         return comps.day.map { "\($0)" } ?? ""
     }
 

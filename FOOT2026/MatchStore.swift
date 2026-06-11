@@ -22,7 +22,7 @@ final class MatchStore {
         if let data = UserDefaults.standard.data(forKey: saveKey),
            let decoded = try? JSONDecoder().decode([Match].self, from: data) {
             // Merge saved scores onto the canonical fixture list
-            var dict = Dictionary(uniqueKeysWithValues: decoded.map { ($0.id, $0) })
+            let dict = Dictionary(uniqueKeysWithValues: decoded.map { ($0.id, $0) })
             matches = Match.allMatches.map { fixture in
                 if let saved = dict[fixture.id] {
                     var m = fixture
@@ -57,7 +57,7 @@ final class MatchStore {
     // MARK: - Helpers
 
     var matchesByStage: [(stage: Stage, matches: [Match])] {
-        let order: [Stage] = [.groupStage, .roundOf32, .roundOf16, .semiFinal, .thirdPlace, .final_]
+        let order: [Stage] = [.groupStage, .roundOf32, .roundOf16, .quarterFinal, .semiFinal, .thirdPlace, .final_]
         return order.compactMap { stage in
             let list = matches.filter { $0.stage == stage }
             return list.isEmpty ? nil : (stage, list)
