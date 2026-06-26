@@ -21,6 +21,8 @@ extension Position {
 
 struct PlayersView: View {
     @State private var searchText = ""
+    @Environment(PlayerStore.self) private var playerStore
+    @Environment(MatchStore.self) private var matchStore
 
     private var teams: [(name: String, players: [Player])] {
         Player.allSquads
@@ -53,6 +55,11 @@ struct PlayersView: View {
             .navigationTitle("Joueurs")
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $searchText, prompt: "Équipe ou joueur…")
+        }
+        .onAppear {
+            // Imported compositions (Sofascore/ESPN) are authoritative for
+            // numbers and positions — sync them into the squad display.
+            playerStore.reconcile(from: matchStore.matches)
         }
     }
 }
@@ -359,4 +366,5 @@ private struct PositionBadge: View {
 #Preview {
     PlayersView()
         .environment(PlayerStore())
+        .environment(MatchStore())
 }
