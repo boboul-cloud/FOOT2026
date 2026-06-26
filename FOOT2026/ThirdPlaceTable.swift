@@ -12,7 +12,11 @@ import Foundation
 extension MatchStore {
     static let thirdPlaceTable: [String: [String: String]] = {
         // Each entry: 8-group key → [slotPattern: assignedGroupLetter]
-        let slots = ["A/B/C/D/F","C/D/F/G/H","C/E/F/H/I","E/H/I/J/K","B/E/F/I/J","A/E/H/I/J","E/F/G/I/J","D/E/I/J/L"]
+        // ⚠️ This array MUST follow the column order of the `raw` rows below
+        // (column i of every row holds the team for slots[i]), NOT the M74…M87
+        // numeric order. Column domains are: C/E/F/H/I, E/F/G/I/J, B/E/F/I/J,
+        // A/B/C/D/F, A/E/H/I/J, C/D/F/G/H, D/E/I/J/L, E/H/I/J/K.
+        let slots = ["C/E/F/H/I","E/F/G/I/J","B/E/F/I/J","A/B/C/D/F","A/E/H/I/J","C/D/F/G/H","D/E/I/J/L","E/H/I/J/K"]
         let raw: [(String, [String])] = [
             ("EFGHIJKL", ["E","J","I","F","H","G","L","K"]),
             ("DFGHIJKL", ["H","G","I","D","J","F","L","K"]),
