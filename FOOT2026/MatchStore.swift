@@ -199,10 +199,16 @@ final class MatchStore {
         }
     }
 
-    /// Fetch real completed match scores from ESPN's public API (no API key required).
-    /// Returns the number of matches updated, or throws on network/parsing failure.
+    /// Result of a live refresh: how many scores and lineups were updated.
+    struct FetchResult {
+        var scores: Int = 0
+        var lineups: Int = 0
+    }
+
+    /// Fetch real match scores and lineups from ESPN's public API (no API key required).
+    /// Returns the number of scores and lineups updated, or throws on network/parsing failure.
     @discardableResult
-    func fetchLiveScores() async throws -> Int {
+    func fetchLiveScores() async throws -> FetchResult {
         // The scoreboard endpoint returns completed events for a given date range.
         let dateRange = "20260611-20260719"
         guard let url = URL(string:
@@ -217,81 +223,149 @@ final class MatchStore {
 
         var anyChange = false
         var newLive: [UUID: LiveStatus] = [:]
+        // Matches whose lineup should be fetched from ESPN this pass.
+        var lineupTargets: [(matchID: UUID, eventID: String)] = []
 
         for event in board.events {
             guard let comp = event.competitions.first else { continue }
             let state = comp.status.type.state   // "pre" | "in" | "post"
             let isCompleted = comp.status.type.completed == true
             let isLive = state == "in"
-            guard isCompleted || isLive else { continue }
 
             let home = comp.competitors.first { $0.homeAway == "home" }
             let away = comp.competitors.first { $0.homeAway == "away" }
+            guard let h = home, let a = away else { continue }
 
-            guard let h = home, let a = away,
+            guard let idx = matches.firstIndex(where: {
+                Self.espnMatches(french: $0.homeTeam, espn: h.team.displayName) &&
+                Self.espnMatches(french: $0.awayTeam, espn: a.team.displayName)
+            }) else { continue }
+            let id = matches[idx].id
+
+            // Lineups are published ~1h before kickoff. Queue a one-time fetch when
+            // we're within 90 min of kickoff (or the match is live/finished) and no
+            // lineup is stored yet. The manual Sofascore import stays as a fallback
+            // if ESPN hasn't released the starting XI.
+            let nearKickoff = Date() >= matches[idx].date.addingTimeInterval(-90 * 60)
+            if (matches[idx].lineup?.isEmpty ?? true), isLive || isCompleted || nearKickoff {
+                lineupTargets.append((id, event.id))
+            }
+
+            // Scores only exist once the match is live or completed.
+            guard isCompleted || isLive,
                   let hScore = Int(h.score ?? ""),
                   let aScore = Int(a.score ?? "") else { continue }
 
-            if let idx = matches.firstIndex(where: {
-                Self.espnMatches(french: $0.homeTeam, espn: h.team.displayName) &&
-                Self.espnMatches(french: $0.awayTeam, espn: a.team.displayName)
-            }) {
-                let id = matches[idx].id
+            // Record live status (never persisted).
+            if isLive {
+                newLive[id] = LiveStatus(
+                    clock: comp.status.displayClock ?? "",
+                    detail: comp.status.type.shortDetail ?? "En direct"
+                )
+            }
 
-                // Record live status (never persisted).
-                if isLive {
-                    newLive[id] = LiveStatus(
-                        clock: comp.status.displayClock ?? "",
-                        detail: comp.status.type.shortDetail ?? "En direct"
-                    )
-                }
+            // ESPN is the source of truth: always overwrite, even a score
+            // that was entered by hand.
+            if matches[idx].homeScore != hScore || matches[idx].awayScore != aScore {
+                matches[idx].homeScore = hScore
+                matches[idx].awayScore = aScore
+                updatedCount += 1
+                anyChange = true
+            }
 
-                // ESPN is the source of truth: always overwrite, even a score
-                // that was entered by hand.
-                if matches[idx].homeScore != hScore || matches[idx].awayScore != aScore {
-                    matches[idx].homeScore = hScore
-                    matches[idx].awayScore = aScore
-                    updatedCount += 1
-                    anyChange = true
-                }
-
-                // Parse goal scorers from competition details
-                if let details = comp.details {
-                    var homeGoals: [String: Int] = [:]
-                    var awayGoals: [String: Int] = [:]
-                    for detail in details {
-                        guard detail.scoringPlay == true,
-                              let athlete = detail.athletesInvolved?.first,
-                              let teamRef = detail.team else { continue }
-                        let name = athlete.displayName
-                        if teamRef.id == h.team.id {
-                            homeGoals[name, default: 0] += 1
-                        } else if teamRef.id == a.team.id {
-                            awayGoals[name, default: 0] += 1
-                        }
+            // Parse goal scorers from competition details
+            if let details = comp.details {
+                var homeGoals: [String: Int] = [:]
+                var awayGoals: [String: Int] = [:]
+                for detail in details {
+                    guard detail.scoringPlay == true,
+                          let athlete = detail.athletesInvolved?.first,
+                          let teamRef = detail.team else { continue }
+                    let name = athlete.displayName
+                    if teamRef.id == h.team.id {
+                        homeGoals[name, default: 0] += 1
+                    } else if teamRef.id == a.team.id {
+                        awayGoals[name, default: 0] += 1
                     }
-                    if !homeGoals.isEmpty || !awayGoals.isEmpty {
-                        let newHome = homeGoals.map { name, count in
-                            GoalScorer(name: name, team: matches[idx].homeTeam,
-                                       flag: matches[idx].homeFlag, goals: count)
-                        }
-                        let newAway = awayGoals.map { name, count in
-                            GoalScorer(name: name, team: matches[idx].awayTeam,
-                                       flag: matches[idx].awayFlag, goals: count)
-                        }
-                        if matches[idx].homeScorers != newHome || matches[idx].awayScorers != newAway {
-                            matches[idx].homeScorers = newHome
-                            matches[idx].awayScorers = newAway
-                            anyChange = true
-                        }
+                }
+                if !homeGoals.isEmpty || !awayGoals.isEmpty {
+                    let newHome = homeGoals.map { name, count in
+                        GoalScorer(name: name, team: matches[idx].homeTeam,
+                                   flag: matches[idx].homeFlag, goals: count)
+                    }
+                    let newAway = awayGoals.map { name, count in
+                        GoalScorer(name: name, team: matches[idx].awayTeam,
+                                   flag: matches[idx].awayFlag, goals: count)
+                    }
+                    if matches[idx].homeScorers != newHome || matches[idx].awayScorers != newAway {
+                        matches[idx].homeScorers = newHome
+                        matches[idx].awayScorers = newAway
+                        anyChange = true
                     }
                 }
             }
         }
 
         liveStatuses = newLive
+
+        // Fetch lineups for the queued matches (one summary request each).
+        var lineupCount = 0
+        for target in lineupTargets {
+            guard let lineup = try? await Self.fetchESPNLineup(eventID: target.eventID),
+                  !lineup.isEmpty,
+                  let idx = matches.firstIndex(where: { $0.id == target.matchID }),
+                  matches[idx].lineup?.isEmpty ?? true else { continue }
+            matches[idx].lineup = lineup
+            lineupCount += 1
+            anyChange = true
+        }
+
         if anyChange { save() }
-        return updatedCount
+        return FetchResult(scores: updatedCount, lineups: lineupCount)
+    }
+
+    /// Fetches a single match's lineup (starting XI + bench) from ESPN's summary
+    /// endpoint and maps it to `LineupData`. Coach is left empty (ESPN rarely
+    /// exposes it); it can still be filled via manual edit.
+    private static func fetchESPNLineup(eventID: String) async throws -> LineupData {
+        guard let url = URL(string:
+            "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=\(eventID)"
+        ) else { throw FetchError.invalidURL }
+
+        var request = URLRequest(url: url)
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            forHTTPHeaderField: "User-Agent"
+        )
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw FetchError.httpError }
+
+        let summary = try JSONDecoder().decode(ESPNSummary.self, from: data)
+        let rosters = summary.rosters ?? []
+        let home = rosters.first { $0.homeAway == "home" } ?? rosters.first
+        let away = rosters.first { $0.homeAway == "away" } ?? (rosters.count > 1 ? rosters[1] : nil)
+
+        func players(_ team: ESPNRoster?, starter: Bool) -> [LineupPlayer] {
+            (team?.roster ?? [])
+                .filter { ($0.starter ?? false) == starter }
+                .map {
+                    LineupPlayer(
+                        name: $0.athlete.displayName,
+                        number: Int($0.jersey ?? ""),
+                        position: $0.position?.abbreviation
+                    )
+                }
+        }
+
+        return LineupData(
+            homeStarting: players(home, starter: true),
+            homeBench:    players(home, starter: false),
+            homeCoach:    "",
+            awayStarting: players(away, starter: true),
+            awayBench:    players(away, starter: false),
+            awayCoach:    ""
+        )
     }
 
     /// Returns true if the French team name in the app corresponds to an ESPN English display name.
@@ -403,6 +477,7 @@ private struct ESPNScoreboard: Decodable {
 }
 
 private struct ESPNEvent: Decodable {
+    let id: String
     let competitions: [ESPNCompetition]
 }
 
@@ -451,4 +526,31 @@ private struct ESPNAthlete: Decodable {
 
 private struct ESPNTeamRef: Decodable {
     let id: String
+}
+
+// MARK: - ESPN Summary models (lineups, private, Decodable)
+
+private struct ESPNSummary: Decodable {
+    let rosters: [ESPNRoster]?
+}
+
+private struct ESPNRoster: Decodable {
+    let homeAway: String?
+    let roster: [ESPNRosterPlayer]?
+}
+
+private struct ESPNRosterPlayer: Decodable {
+    let starter: Bool?
+    let jersey: String?
+    let athlete: ESPNRosterAthlete
+    let position: ESPNRosterPosition?
+}
+
+private struct ESPNRosterAthlete: Decodable {
+    let displayName: String
+    let shortName: String?
+}
+
+private struct ESPNRosterPosition: Decodable {
+    let abbreviation: String?
 }

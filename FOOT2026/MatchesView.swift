@@ -108,10 +108,18 @@ struct MatchesView: View {
                         isFetching = true
                         fetchMessage = nil
                         do {
-                            let n = try await store.fetchLiveScores()
-                            fetchMessage = n == 0
-                                ? "Aucun nouveau score disponible."
-                                : "\(n) score\(n > 1 ? "s" : "") mis à jour."
+                            let r = try await store.fetchLiveScores()
+                            var parts: [String] = []
+                            if r.scores > 0 {
+                                parts.append("\(r.scores) score\(r.scores > 1 ? "s" : "") mis à jour")
+                            }
+                            if r.lineups > 0 {
+                                let s = r.lineups > 1 ? "s" : ""
+                                parts.append("\(r.lineups) composition\(s) chargée\(s)")
+                            }
+                            fetchMessage = parts.isEmpty
+                                ? "Aucune nouveauté disponible."
+                                : parts.joined(separator: " · ") + "."
                         } catch {
                             fetchMessage = "Erreur : \(error.localizedDescription)"
                         }
