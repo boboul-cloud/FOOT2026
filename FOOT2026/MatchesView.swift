@@ -57,7 +57,7 @@ struct MatchesView: View {
                     }
                 }
                 .listStyle(.plain)
-                .refreshable { try? await store.fetchLiveScores() }
+                .refreshable { _ = try? await store.fetchLiveScores() }
                 .animation(.default, value: filteredMatches.map(\.id))
 
                 // Stats bar
