@@ -88,6 +88,21 @@ struct Match: Identifiable, Codable {
 
     var hasScore: Bool { homeScore != nil && awayScore != nil }
 
+    /// True once both teams are determined (group stage, or a knockout match whose
+    /// participants are known). Placeholder fixtures use the 🏳️ flag.
+    var teamsAreDetermined: Bool {
+        homeFlag != "🏳️" && awayFlag != "🏳️"
+    }
+
+    /// Google search URL that opens Google's live match panel (score, scorers).
+    /// Built from the team names — no manual paste needed.
+    var googleLiveURL: URL? {
+        guard teamsAreDetermined else { return nil }
+        var components = URLComponents(string: "https://www.google.com/search")
+        components?.queryItems = [URLQueryItem(name: "q", value: "\(homeTeam) \(awayTeam) score")]
+        return components?.url
+    }
+
     var scoreText: String {
         guard let h = homeScore, let a = awayScore else { return "-" }
         return "\(h) - \(a)"

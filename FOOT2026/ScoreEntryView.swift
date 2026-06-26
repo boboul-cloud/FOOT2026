@@ -70,6 +70,13 @@ struct ScoreEntryView: View {
 
                 // Match link
                 Section {
+                    if let liveURL = match.googleLiveURL {
+                        Link(destination: liveURL) {
+                            Label("Suivre le match en direct", systemImage: "dot.radiowaves.left.and.right")
+                                .font(.subheadline.bold())
+                        }
+                        .tint(.red)
+                    }
                     HStack(spacing: 8) {
                         Image(systemName: "link")
                             .foregroundStyle(.secondary)
