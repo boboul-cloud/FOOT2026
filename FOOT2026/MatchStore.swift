@@ -63,16 +63,11 @@ let fifaRankings: [String: Int] = [
 final class MatchStore {
 
     private let saveKey = "foot2026_matches"
-    private let espnFilledKey = "foot2026_espn_filled"
 
     var matches: [Match] = []
 
     /// Transient (non-persisted) live status of in-progress matches, keyed by match id.
     var liveStatuses: [UUID: LiveStatus] = [:]
-
-    /// IDs of matches whose score was filled automatically from ESPN.
-    /// Used so the live fetch never overwrites a score the user typed by hand.
-    private var espnFilled: Set<UUID> = []
 
     struct LiveStatus: Equatable {
         var clock: String   // e.g. "62'", "HT"
@@ -81,7 +76,6 @@ final class MatchStore {
 
     init() {
         load()
-        loadEspnFilled()
     }
 
     // MARK: - Persistence
@@ -118,24 +112,10 @@ final class MatchStore {
         }
     }
 
-    private func loadEspnFilled() {
-        if let arr = UserDefaults.standard.array(forKey: espnFilledKey) as? [String] {
-            espnFilled = Set(arr.compactMap(UUID.init))
-        }
-    }
-
-    private func saveEspnFilled() {
-        UserDefaults.standard.set(espnFilled.map(\.uuidString), forKey: espnFilledKey)
-    }
-
     func updateScore(matchID: UUID, home: Int?, away: Int?) {
         guard let idx = matches.firstIndex(where: { $0.id == matchID }) else { return }
         matches[idx].homeScore = home
         matches[idx].awayScore = away
-        // A hand-entered score is no longer "owned" by ESPN, so protect it from
-        // being overwritten on the next live fetch.
-        espnFilled.remove(matchID)
-        saveEspnFilled()
         save()
     }
 
@@ -145,8 +125,6 @@ final class MatchStore {
         matches[idx].awayScore = nil
         matches[idx].homeScorers = []
         matches[idx].awayScorers = []
-        espnFilled.remove(matchID)
-        saveEspnFilled()
         save()
     }
 
@@ -268,15 +246,11 @@ final class MatchStore {
                     )
                 }
 
-                // Protect a hand-entered score: only fill matches that are still
-                // empty or that ESPN itself filled previously.
-                let isManual = matches[idx].hasScore && !espnFilled.contains(id)
-                guard !isManual else { continue }
-
+                // ESPN is the source of truth: always overwrite, even a score
+                // that was entered by hand.
                 if matches[idx].homeScore != hScore || matches[idx].awayScore != aScore {
                     matches[idx].homeScore = hScore
                     matches[idx].awayScore = aScore
-                    espnFilled.insert(id)
                     updatedCount += 1
                     anyChange = true
                 }
@@ -316,10 +290,7 @@ final class MatchStore {
         }
 
         liveStatuses = newLive
-        if anyChange {
-            saveEspnFilled()
-            save()
-        }
+        if anyChange { save() }
         return updatedCount
     }
 
@@ -392,9 +363,7 @@ final class MatchStore {
             matches[idx].homeScorers = []
             matches[idx].awayScorers = []
         }
-        espnFilled.removeAll()
         liveStatuses.removeAll()
-        saveEspnFilled()
         save()
     }
 
