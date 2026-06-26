@@ -1,6 +1,6 @@
 // ScoreEntryView.swift
 // FOOT2026
-// Sheet to enter / edit a match score
+// Sheet to enter / edit a match score and goal scorers
 
 import SwiftUI
 
@@ -11,45 +11,131 @@ struct ScoreEntryView: View {
 
     @State private var homeText: String = ""
     @State private var awayText: String = ""
+    @State private var homeScorers: [GoalScorer] = []
+    @State private var awayScorers: [GoalScorer] = []
+    @State private var matchLink: String = ""
+    @State private var showStandings    = false
+    @State private var showLineupImport = false
+    @State private var showLineupDetail = false
+
+    private var currentMatch: Match? {
+        store.matches.first { $0.id == match.id }
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 32) {
+            Form {
+                // Teams + score
+                Section {
+                    HStack(spacing: 0) {
+                        teamColumn(flag: match.homeFlag, name: match.homeTeam)
+                        VStack(spacing: 4) {
+                            HStack(spacing: 12) {
+                                scoreField(text: $homeText)
+                                Text("—")
+                                    .font(.title.bold())
+                                    .foregroundStyle(.secondary)
+                                scoreField(text: $awayText)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        teamColumn(flag: match.awayFlag, name: match.awayTeam)
+                    }
+                    .padding(.vertical, 4)
 
-                // Teams header
-                HStack(spacing: 0) {
-                    teamColumn(flag: match.homeFlag, name: match.homeTeam)
-                    Text("VS")
-                        .font(.title3.bold())
-                        .foregroundStyle(.secondary)
-                        .frame(width: 44)
-                    teamColumn(flag: match.awayFlag, name: match.awayTeam)
-                }
-                .padding(.top, 8)
-
-                // Score row
-                HStack(spacing: 24) {
-                    scoreField(text: $homeText)
-                    Text("—")
-                        .font(.largeTitle.bold())
-                        .foregroundStyle(.secondary)
-                    scoreField(text: $awayText)
-                }
-
-                // Date/venue info
-                VStack(spacing: 4) {
-                    Text("\(match.parisDate)  ·  \(match.parisTime)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    Text("\(match.venue), \(match.city)")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                    VStack(spacing: 2) {
+                        Text("\(match.parisDate)  ·  \(match.parisTime)")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("\(match.venue), \(match.city)")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
 
-                Spacer()
+                // Home scorers
+                scorersSection(
+                    team: match.homeTeam,
+                    flag: match.homeFlag,
+                    scorers: $homeScorers
+                )
 
-                // Actions
-                VStack(spacing: 12) {
+                // Away scorers
+                scorersSection(
+                    team: match.awayTeam,
+                    flag: match.awayFlag,
+                    scorers: $awayScorers
+                )
+
+                // Match link
+                Section {
+                    HStack(spacing: 8) {
+                        Image(systemName: "link")
+                            .foregroundStyle(.secondary)
+                        TextField("Coller un lien (replay, stats…)", text: $matchLink)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        if !matchLink.isEmpty {
+                            Button {
+                                matchLink = ""
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    if let url = URL(string: matchLink), !matchLink.isEmpty,
+                       UIApplication.shared.canOpenURL(url) {
+                        Link(destination: url) {
+                            Label("Ouvrir le lien", systemImage: "arrow.up.right.square")
+                                .font(.footnote)
+                        }
+                    }
+                } header: {
+                    Text("Lien")
+                }
+
+                // Composition
+                Section {
+                    if let lineup = currentMatch?.lineup, !lineup.isEmpty {
+                        Button {
+                            showLineupDetail = true
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Label("Composition importée", systemImage: "checkmark.circle.fill")
+                                        .font(.subheadline.bold()).foregroundStyle(.indigo)
+                                    Text("\(match.homeFlag) \(match.homeTeam) : \(lineup.homeStarting.count) tit. · \(lineup.homeBench.count) rempl.")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                    Text("\(match.awayFlag) \(match.awayTeam) : \(lineup.awayStarting.count) tit. · \(lineup.awayBench.count) rempl.")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        Button("Réimporter depuis Sofascore") { showLineupImport = true }
+                            .font(.footnote)
+                            .tint(.secondary)
+                    } else {
+                        Button {
+                            showLineupImport = true
+                        } label: {
+                            Label("Importer la composition Sofascore…", systemImage: "person.3.fill")
+                        }
+                        .tint(.indigo)
+                    }
+                } header: {
+                    Text("Composition")
+                }
+
+                Section {
                     Button {
                         saveScore()
                     } label: {
@@ -68,13 +154,36 @@ struct ScoreEntryView: View {
                             Label("Effacer le score", systemImage: "trash")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                    }
+
+                    if match.stage == .groupStage, let group = match.group {
+                        Button {
+                            showStandings = true
+                        } label: {
+                            Label("Classement Groupe \(group.rawValue)", systemImage: "list.number")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .tint(.blue)
+                        .sheet(isPresented: $showStandings) {
+                            StandingsView(initialGroup: group)
+                                .environment(store)
+                        }
                     }
                 }
             }
-            .padding()
             .navigationTitle("Saisir le score")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showLineupImport) {
+                LineupImportSheet(match: currentMatch ?? match) { lineup in
+                    store.updateLineup(lineup, matchID: match.id)
+                }
+            }
+            .sheet(isPresented: $showLineupDetail) {
+                LineupDetailSheet(match: currentMatch ?? match) { updated in
+                    store.updateLineup(updated, matchID: match.id)
+                    showLineupDetail = false
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Annuler") { dismiss() }
@@ -83,11 +192,58 @@ struct ScoreEntryView: View {
             .onAppear {
                 if let h = match.homeScore { homeText = "\(h)" }
                 if let a = match.awayScore { awayText = "\(a)" }
+                homeScorers = match.homeScorers
+                awayScorers = match.awayScorers
+                matchLink = match.matchLink ?? ""
             }
         }
     }
 
-    // MARK: - Private
+    // MARK: - Scorers section
+
+    @ViewBuilder
+    private func scorersSection(
+        team: String,
+        flag: String,
+        scorers: Binding<[GoalScorer]>
+    ) -> some View {
+        Section {
+            ForEach(scorers.indices, id: \.self) { i in
+                HStack(spacing: 10) {
+                    Text("⚽️")
+                    TextField("Nom du joueur", text: scorers[i].name)
+                        .frame(maxWidth: .infinity)
+                    Stepper(
+                        "\(scorers[i].goals.wrappedValue)",
+                        value: scorers[i].goals,
+                        in: 1...20
+                    )
+                    .labelsHidden()
+                    .frame(width: 80)
+                    Text("\(scorers[i].goals.wrappedValue) but\(scorers[i].goals.wrappedValue > 1 ? "s" : "")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 48, alignment: .trailing)
+                }
+            }
+            .onDelete { offsets in
+                scorers.wrappedValue.remove(atOffsets: offsets)
+            }
+
+            Button {
+                scorers.wrappedValue.append(
+                    GoalScorer(name: "", team: team, flag: flag, goals: 1)
+                )
+            } label: {
+                Label("Ajouter un buteur", systemImage: "plus.circle.fill")
+            }
+            .tint(.orange)
+        } header: {
+            Text("\(flag) \(team)")
+        }
+    }
+
+    // MARK: - Helpers
 
     private var isValid: Bool {
         Int(homeText) != nil && Int(awayText) != nil
@@ -96,28 +252,31 @@ struct ScoreEntryView: View {
     private func saveScore() {
         guard let h = Int(homeText), let a = Int(awayText) else { return }
         store.updateScore(matchID: match.id, home: h, away: a)
+        let cleanHome = homeScorers.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+        let cleanAway = awayScorers.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+        store.updateScorers(matchID: match.id, homeScorers: cleanHome, awayScorers: cleanAway)
+        store.updateMatchLink(matchID: match.id, link: matchLink)
         dismiss()
     }
 
     @ViewBuilder
     private func teamColumn(flag: String, name: String) -> some View {
-        VStack(spacing: 6) {
-            Text(flag).font(.system(size: 44))
+        VStack(spacing: 4) {
+            Text(flag).font(.system(size: 36))
             Text(name)
-                .font(.subheadline.bold())
+                .font(.caption.bold())
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: 80)
     }
 
     @ViewBuilder
     private func scoreField(text: Binding<String>) -> some View {
         TextField("0", text: text)
             .keyboardType(.numberPad)
-            .font(.system(size: 48, weight: .bold, design: .rounded))
+            .font(.system(size: 36, weight: .bold, design: .rounded))
             .multilineTextAlignment(.center)
-            .frame(width: 90, height: 70)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .frame(width: 60, height: 54)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 }

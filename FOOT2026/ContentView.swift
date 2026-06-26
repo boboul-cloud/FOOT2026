@@ -9,7 +9,26 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        MatchesView()
+        TabView {
+            Tab("Matchs", systemImage: "list.bullet") {
+                MatchesView()
+            }
+            Tab("Classement", systemImage: "chart.bar.fill") {
+                StandingsView()
+            }
+            Tab("Buteurs", systemImage: "soccerball") {
+                ScorersView()
+            }
+            Tab("Tableau", systemImage: "trophy.fill") {
+                BracketView()
+            }
+            Tab("Joueurs", systemImage: "person.2.fill") {
+                PlayersView()
+            }
+            Tab("Réglages", systemImage: "gearshape.fill") {
+                BackupView()
+            }
+        }
     }
 }
 

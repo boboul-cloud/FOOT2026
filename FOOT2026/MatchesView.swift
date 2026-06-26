@@ -11,6 +11,7 @@ struct MatchesView: View {
     @Environment(MatchStore.self) private var store
     @State private var selectedStage: Stage? = .groupStage
     @State private var selectedGroup: Group? = nil
+    @State private var todayOnly = false
     @State private var matchToEdit: Match? = nil
     @State private var searchText = ""
     @State private var showAutoFillConfirm = false
@@ -28,15 +29,26 @@ struct MatchesView: View {
                 // Stage picker
                 stagePicker
 
-                // Group filter (only visible in group stage)
-                if selectedStage == .groupStage {
+                // Group filter (only visible in group stage, not in "Today" mode)
+                if !todayOnly && selectedStage == .groupStage {
                     groupPicker
                 }
 
                 // Match list
                 List {
+                    if todayOnly && filteredMatches.isEmpty {
+                        ContentUnavailableView(
+                            "Aucun match aujourd'hui",
+                            systemImage: "calendar",
+                            description: Text("Aucune rencontre n'est programmée ce jour.")
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    }
                     ForEach(filteredMatches) { match in
-                        MatchRowView(match: match)
+                        MatchRowView(match: match,
+                                     chronoRank: chronoRank[match.id] ?? 0,
+                                     live: store.liveStatuses[match.id])
                             .contentShape(Rectangle())
                             .onTapGesture { matchToEdit = match }
                             .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
@@ -45,7 +57,20 @@ struct MatchesView: View {
                     }
                 }
                 .listStyle(.plain)
+                .refreshable { try? await store.fetchLiveScores() }
                 .animation(.default, value: filteredMatches.map(\.id))
+
+                // Stats bar
+                HStack(spacing: 0) {
+                    statCell(value: playedMatches, label: "joués", color: .green)
+                    Divider().frame(height: 28)
+                    statCell(value: remainingMatches, label: "restants", color: .orange)
+                    Divider().frame(height: 28)
+                    statCell(value: totalMatches, label: "total", color: .secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(Color(.secondarySystemGroupedBackground))
             }
             .navigationTitle("Coupe du Monde 2026")
             .navigationBarTitleDisplayMode(.inline)
@@ -124,20 +149,50 @@ struct MatchesView: View {
 
     // MARK: - Pickers
 
+    @ViewBuilder
+    private func statCell(value: Int, label: String, color: Color) -> some View {
+        VStack(spacing: 1) {
+            Text("\(value)")
+                .font(.system(.title3, design: .rounded, weight: .bold))
+                .foregroundStyle(color)
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
     private var stagePicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                // "Today" chip — highlights matches of the day
+                Button {
+                    withAnimation { todayOnly.toggle(); selectedGroup = nil }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 10, weight: .bold))
+                        Text("Aujourd'hui")
+                    }
+                    .font(.caption.bold())
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(todayOnly ? Color.red : Color(.systemGray5), in: Capsule())
+                    .foregroundStyle(todayOnly ? .white : .primary)
+                }
+                .buttonStyle(.plain)
+
                 ForEach(stages, id: \.self) { stage in
                     Button {
-                        withAnimation { selectedStage = stage; selectedGroup = nil }
+                        withAnimation { todayOnly = false; selectedStage = stage; selectedGroup = nil }
                     } label: {
                         Text(stage.localizedName)
                             .font(.caption.bold())
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
-                            .background(selectedStage == stage ? Color.accentColor : Color(.systemGray5),
+                            .background(!todayOnly && selectedStage == stage ? Color.accentColor : Color(.systemGray5),
                                         in: Capsule())
-                            .foregroundStyle(selectedStage == stage ? .white : .primary)
+                            .foregroundStyle(!todayOnly && selectedStage == stage ? .white : .primary)
                     }
                     .buttonStyle(.plain)
                 }
@@ -183,9 +238,34 @@ struct MatchesView: View {
         }
     }
 
+    // MARK: - Chronological rank (global, all 104 matches sorted by date)
+    private var chronoRank: [UUID: Int] {
+        let sorted = store.matches.sorted { $0.date < $1.date }
+        return Dictionary(uniqueKeysWithValues: sorted.enumerated().map { ($1.id, $0 + 1) })
+    }
+
+    // MARK: - Stats (global)
+    private var totalMatches: Int { store.matches.count }
+    private var playedMatches: Int { store.matches.filter { $0.hasScore }.count }
+    private var remainingMatches: Int { totalMatches - playedMatches }
+
     // MARK: - Filtered matches
 
     private var filteredMatches: [Match] {
+        // "Today" mode short-circuits the stage/group filters
+        if todayOnly {
+            var list = store.todayMatches
+            if !searchText.isEmpty {
+                let q = searchText.lowercased()
+                list = list.filter {
+                    $0.homeTeam.lowercased().contains(q) ||
+                    $0.awayTeam.lowercased().contains(q) ||
+                    $0.city.lowercased().contains(q)
+                }
+            }
+            return list
+        }
+
         var list = store.matches
 
         // Stage filter
@@ -216,11 +296,21 @@ struct MatchesView: View {
 
 struct MatchRowView: View {
     let match: Match
+    var chronoRank: Int = 0
+    var live: MatchStore.LiveStatus? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             // Date column
             VStack(alignment: .center, spacing: 2) {
+                if chronoRank > 0 {
+                    Text("M\(chronoRank)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor, in: Capsule())
+                }
                 Text(dayNumber)
                     .font(.title2.bold())
                     .monospacedDigit()
@@ -253,13 +343,17 @@ struct MatchRowView: View {
                     Text(match.scoreText)
                         .font(.title3.bold())
                         .monospacedDigit()
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(live != nil ? Color.red : .primary)
                 } else {
                     Text("vs")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                groupBadge
+                if let live {
+                    liveBadge(live)
+                } else {
+                    groupBadge
+                }
                 broadcasterBadges
             }
             .frame(width: 70)
@@ -299,6 +393,21 @@ struct MatchRowView: View {
         fmt.dateFormat = "MMM"
         fmt.timeZone = TimeZone(identifier: "Europe/Paris")
         return fmt.string(from: match.date).uppercased()
+    }
+
+    @ViewBuilder
+    private func liveBadge(_ live: MatchStore.LiveStatus) -> some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 5, height: 5)
+            Text(live.clock.isEmpty ? "EN DIRECT" : live.clock)
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.red)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Color.red.opacity(0.12), in: Capsule())
     }
 
     @ViewBuilder
