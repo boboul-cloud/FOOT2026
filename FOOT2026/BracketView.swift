@@ -110,7 +110,7 @@ struct BracketView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 stagePicker
-                if !continentStats.isEmpty {
+                if continentStats.contains(where: { $0.count > 0 }) {
                     continentBar
                 }
                 ScrollView {
@@ -211,11 +211,13 @@ struct BracketView: View {
                 teamsByConf[conf, default: []].insert(resolved.name)
             }
         }
-        return Confederation.allCases.compactMap { conf in
-            let n = teamsByConf[conf]?.count ?? 0
-            return n > 0 ? (conf, n, starting[conf] ?? n) : nil
+        // Show every confederation present at kickoff (total > 0), even those
+        // now fully eliminated (count 0), so the starting totals always sum to 48.
+        return Confederation.allCases.compactMap { conf -> (conf: Confederation, count: Int, total: Int)? in
+            guard let total = starting[conf], total > 0 else { return nil }
+            return (conf, teamsByConf[conf]?.count ?? 0, total)
         }
-        .sorted { $0.count > $1.count }
+        .sorted { $0.count != $1.count ? $0.count > $1.count : $0.total > $1.total }
     }
 
     private var continentBar: some View {
