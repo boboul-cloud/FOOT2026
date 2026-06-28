@@ -37,6 +37,35 @@ enum Confederation: String, CaseIterable {
         case .ofc:      return .teal
         }
     }
+
+    /// Full French name of the confederation.
+    var fullName: String {
+        switch self {
+        case .uefa:     return "Union des associations européennes de football"
+        case .conmebol: return "Confédération sud-américaine de football"
+        case .caf:      return "Confédération africaine de football"
+        case .afc:      return "Confédération asiatique de football"
+        case .concacaf: return "Confédération d'Amérique du Nord, centrale et Caraïbe"
+        case .ofc:      return "Confédération du football d'Océanie"
+        }
+    }
+
+    /// French Wikipedia page explaining the confederation.
+    var wikipediaURL: URL? {
+        let page: String
+        switch self {
+        case .uefa:     page = "Union des associations européennes de football"
+        case .conmebol: page = "Confédération sud-américaine de football"
+        case .caf:      page = "Confédération africaine de football"
+        case .afc:      page = "Confédération asiatique de football"
+        case .concacaf: page = "CONCACAF"
+        case .ofc:      page = "Confédération du football d'Océanie"
+        }
+        let encoded = page
+            .replacingOccurrences(of: " ", with: "_")
+            .addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? page
+        return URL(string: "https://fr.wikipedia.org/wiki/\(encoded)")
+    }
 }
 
 /// Maps every team name used in the tournament to its confederation.
@@ -71,6 +100,7 @@ struct BracketView: View {
     @Environment(MatchStore.self) private var store
     @State private var selectedStage: Stage = .roundOf32
     @State private var matchToEdit: Match? = nil
+    @State private var showConfederationInfo = false
 
     private let knockoutStages: [Stage] = [
         .roundOf32, .roundOf16, .quarterFinal, .semiFinal, .thirdPlace, .final_
@@ -118,6 +148,9 @@ struct BracketView: View {
             .sheet(item: $matchToEdit) { match in
                 ScoreEntryView(match: match)
                     .environment(store)
+            }
+            .sheet(isPresented: $showConfederationInfo) {
+                ConfederationInfoView()
             }
         }
     }
@@ -191,6 +224,14 @@ struct BracketView: View {
                     .padding(.vertical, 6)
                     .background(Color(.secondarySystemGroupedBackground), in: Capsule())
                 }
+                Button {
+                    showConfederationInfo = true
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
@@ -336,5 +377,69 @@ struct BracketMatchCard: View {
     private var cardBackground: Color {
         guard match.hasScore else { return Color(.secondarySystemGroupedBackground) }
         return Color(.secondarySystemGroupedBackground)
+    }
+}
+
+// MARK: - Confederation info sheet
+
+/// Explains each confederation acronym with its full name and a Wikipedia link.
+struct ConfederationInfoView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(Confederation.allCases, id: \.self) { conf in
+                        row(for: conf)
+                    }
+                } footer: {
+                    Text("Les confédérations regroupent les fédérations nationales par continent. Touchez une ligne pour ouvrir sa page Wikipédia.")
+                }
+            }
+            .navigationTitle("Confédérations")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("OK") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(for conf: Confederation) -> some View {
+        let content = HStack(spacing: 12) {
+            Circle()
+                .fill(conf.color)
+                .frame(width: 12, height: 12)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(conf.rawValue)
+                        .font(.subheadline.bold())
+                    Text("·")
+                        .foregroundStyle(.secondary)
+                    Text(conf.label)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Text(conf.fullName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if conf.wikipediaURL != nil {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+
+        if let url = conf.wikipediaURL {
+            Link(destination: url) { content }
+                .tint(.primary)
+        } else {
+            content
+        }
     }
 }
