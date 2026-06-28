@@ -101,6 +101,7 @@ struct BracketView: View {
     @State private var selectedStage: Stage = .roundOf32
     @State private var matchToEdit: Match? = nil
     @State private var showConfederationInfo = false
+    @State private var confSelection: ConfederationSelection? = nil
 
     private let knockoutStages: [Stage] = [
         .roundOf32, .roundOf16, .quarterFinal, .semiFinal, .thirdPlace, .final_
@@ -151,6 +152,9 @@ struct BracketView: View {
             }
             .sheet(isPresented: $showConfederationInfo) {
                 ConfederationInfoView()
+            }
+            .sheet(item: $confSelection) { selection in
+                ConfederationTeamsView(selection: selection)
             }
         }
     }
@@ -220,6 +224,41 @@ struct BracketView: View {
         .sorted { $0.count != $1.count ? $0.count > $1.count : $0.total > $1.total }
     }
 
+    /// Builds the qualified / eliminated breakdown for one confederation at the
+    /// selected stage, used to populate the detail sheet.
+    private func confederationSelection(for conf: Confederation) -> ConfederationSelection {
+        // Starting teams (group stage participants) with their flags.
+        var startingFlags: [String: String] = [:]
+        for match in store.matches where match.stage == .groupStage {
+            if teamConfederations[match.homeTeam] == conf { startingFlags[match.homeTeam] = match.homeFlag }
+            if teamConfederations[match.awayTeam] == conf { startingFlags[match.awayTeam] = match.awayFlag }
+        }
+        // Teams still present at the selected stage.
+        var qualifiedNames: Set<String> = []
+        for match in stageMatches {
+            for placeholder in [match.homeTeam, match.awayTeam] {
+                let resolved = store.resolveTeam(placeholder)
+                if resolved.flag != "🏳️", teamConfederations[resolved.name] == conf {
+                    qualifiedNames.insert(resolved.name)
+                }
+            }
+        }
+        let qualified = startingFlags
+            .filter { qualifiedNames.contains($0.key) }
+            .map { ConfTeam(name: $0.key, flag: $0.value) }
+            .sorted { $0.name < $1.name }
+        let eliminated = startingFlags
+            .filter { !qualifiedNames.contains($0.key) }
+            .map { ConfTeam(name: $0.key, flag: $0.value) }
+            .sorted { $0.name < $1.name }
+        return ConfederationSelection(
+            conf: conf,
+            stageName: stageShortName(selectedStage),
+            qualified: qualified,
+            eliminated: eliminated
+        )
+    }
+
     private var continentBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -227,22 +266,27 @@ struct BracketView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 ForEach(continentStats, id: \.conf) { stat in
-                    HStack(spacing: 5) {
-                        Circle()
-                            .fill(stat.conf.color)
-                            .frame(width: 7, height: 7)
-                        Text(stat.conf.rawValue)
-                            .font(.caption2.bold())
-                        Text("\(stat.count)")
-                            .font(.caption2.bold())
-                            .foregroundStyle(stat.conf.color)
-                        Text("/ \(stat.total)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    Button {
+                        confSelection = confederationSelection(for: stat.conf)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(stat.conf.color)
+                                .frame(width: 7, height: 7)
+                            Text(stat.conf.rawValue)
+                                .font(.caption2.bold())
+                            Text("\(stat.count)")
+                                .font(.caption2.bold())
+                                .foregroundStyle(stat.conf.color)
+                            Text("/ \(stat.total)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Color(.secondarySystemGroupedBackground), in: Capsule())
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                    .buttonStyle(.plain)
                 }
                 Button {
                     showConfederationInfo = true
@@ -460,6 +504,86 @@ struct ConfederationInfoView: View {
                 .tint(.primary)
         } else {
             content
+        }
+    }
+}
+
+// MARK: - Confederation teams sheet
+
+/// A team belonging to a confederation, with its flag.
+struct ConfTeam: Identifiable {
+    let id = UUID()
+    let name: String
+    let flag: String
+}
+
+/// Selection payload for the qualified / eliminated breakdown of one confederation.
+struct ConfederationSelection: Identifiable {
+    var id: String { conf.rawValue }
+    let conf: Confederation
+    let stageName: String
+    let qualified: [ConfTeam]
+    let eliminated: [ConfTeam]
+}
+
+/// Lists the qualified and eliminated teams of a confederation at a given stage.
+struct ConfederationTeamsView: View {
+    let selection: ConfederationSelection
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    if selection.qualified.isEmpty {
+                        Text("Aucune équipe qualifiée")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(selection.qualified) { team in
+                            teamRow(team, qualified: true)
+                        }
+                    }
+                } header: {
+                    Label("Qualifiés (\(selection.qualified.count))", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+
+                Section {
+                    if selection.eliminated.isEmpty {
+                        Text("Aucune équipe éliminée")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(selection.eliminated) { team in
+                            teamRow(team, qualified: false)
+                        }
+                    }
+                } header: {
+                    Label("Éliminés (\(selection.eliminated.count))", systemImage: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                }
+            }
+            .navigationTitle("\(selection.conf.rawValue) · \(selection.stageName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("OK") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func teamRow(_ team: ConfTeam, qualified: Bool) -> some View {
+        HStack(spacing: 12) {
+            Text(team.flag)
+                .font(.title2)
+            Text(team.name)
+                .font(.body)
+                .foregroundStyle(qualified ? .primary : .secondary)
+            Spacer()
+            Image(systemName: qualified ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .foregroundStyle(qualified ? .green : .red)
+                .font(.caption)
         }
     }
 }
