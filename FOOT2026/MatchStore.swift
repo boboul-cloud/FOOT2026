@@ -224,9 +224,12 @@ final class MatchStore {
         var anyChange = false
         var newLive: [UUID: LiveStatus] = [:]
         // Matches whose lineup should be fetched from ESPN this pass.
-        var lineupTargets: [(matchID: UUID, eventID: String)] = []
+        var lineupTargets: [(matchID: UUID, eventID: String, reversed: Bool)] = []
 
-        for event in board.events {
+        // Process chronologically so group results are applied before the knockout
+        // fixtures that resolve from them (e.g. "V.M73") in this same pass.
+        let sortedEvents = board.events.sorted { ($0.date ?? "") < ($1.date ?? "") }
+        for event in sortedEvents {
             guard let comp = event.competitions.first else { continue }
             let state = comp.status.type.state   // "pre" | "in" | "post"
             let isCompleted = comp.status.type.completed == true
@@ -236,10 +239,24 @@ final class MatchStore {
             let away = comp.competitors.first { $0.homeAway == "away" }
             guard let h = home, let a = away else { continue }
 
-            guard let idx = matches.firstIndex(where: {
-                Self.espnMatches(french: $0.homeTeam, espn: h.team.displayName) &&
-                Self.espnMatches(french: $0.awayTeam, espn: a.team.displayName)
-            }) else { continue }
+            // Match by *resolved* team names so knockout fixtures (whose stored
+            // teams are placeholders like "V.M73" or "1er Gr.A") are found too.
+            // ESPN's home/away orientation may differ from ours, so remember when
+            // it is reversed to map scores and scorers correctly.
+            var matchInfo: (idx: Int, reversed: Bool)? = nil
+            for (i, m) in matches.enumerated() {
+                let ourHome = resolveTeam(m.homeTeam).name
+                let ourAway = resolveTeam(m.awayTeam).name
+                if Self.espnMatches(french: ourHome, espn: h.team.displayName),
+                   Self.espnMatches(french: ourAway, espn: a.team.displayName) {
+                    matchInfo = (i, false); break
+                }
+                if Self.espnMatches(french: ourHome, espn: a.team.displayName),
+                   Self.espnMatches(french: ourAway, espn: h.team.displayName) {
+                    matchInfo = (i, true); break
+                }
+            }
+            guard let (idx, reversed) = matchInfo else { continue }
             let id = matches[idx].id
 
             // Lineups are published ~1h before kickoff. Queue a one-time fetch when
@@ -248,13 +265,17 @@ final class MatchStore {
             // if ESPN hasn't released the starting XI.
             let nearKickoff = Date() >= matches[idx].date.addingTimeInterval(-90 * 60)
             if (matches[idx].lineup?.isEmpty ?? true), isLive || isCompleted || nearKickoff {
-                lineupTargets.append((id, event.id))
+                lineupTargets.append((id, event.id, reversed))
             }
 
             // Scores only exist once the match is live or completed.
             guard isCompleted || isLive,
-                  let hScore = Int(h.score ?? ""),
-                  let aScore = Int(a.score ?? "") else { continue }
+                  let espnHomeScore = Int(h.score ?? ""),
+                  let espnAwayScore = Int(a.score ?? "") else { continue }
+
+            // Re-orient ESPN's scores onto our home/away.
+            let hScore = reversed ? espnAwayScore : espnHomeScore
+            let aScore = reversed ? espnHomeScore : espnAwayScore
 
             // Record live status (never persisted).
             if isLive {
@@ -273,29 +294,35 @@ final class MatchStore {
                 anyChange = true
             }
 
-            // Parse goal scorers from competition details
+            // Parse goal scorers from competition details (keyed by ESPN side).
             if let details = comp.details {
-                var homeGoals: [String: Int] = [:]
-                var awayGoals: [String: Int] = [:]
+                var espnHomeGoals: [String: Int] = [:]
+                var espnAwayGoals: [String: Int] = [:]
                 for detail in details {
                     guard detail.scoringPlay == true,
                           let athlete = detail.athletesInvolved?.first,
                           let teamRef = detail.team else { continue }
                     let name = athlete.displayName
                     if teamRef.id == h.team.id {
-                        homeGoals[name, default: 0] += 1
+                        espnHomeGoals[name, default: 0] += 1
                     } else if teamRef.id == a.team.id {
-                        awayGoals[name, default: 0] += 1
+                        espnAwayGoals[name, default: 0] += 1
                     }
                 }
-                if !homeGoals.isEmpty || !awayGoals.isEmpty {
+                if !espnHomeGoals.isEmpty || !espnAwayGoals.isEmpty {
+                    // Re-orient onto our home/away and resolve real team names/flags
+                    // (placeholders for knockout fixtures).
+                    let ourHome = resolveTeam(matches[idx].homeTeam)
+                    let ourAway = resolveTeam(matches[idx].awayTeam)
+                    let homeGoals = reversed ? espnAwayGoals : espnHomeGoals
+                    let awayGoals = reversed ? espnHomeGoals : espnAwayGoals
                     let newHome = homeGoals.map { name, count in
-                        GoalScorer(name: name, team: matches[idx].homeTeam,
-                                   flag: matches[idx].homeFlag, goals: count)
+                        GoalScorer(name: name, team: ourHome.name,
+                                   flag: ourHome.flag, goals: count)
                     }
                     let newAway = awayGoals.map { name, count in
-                        GoalScorer(name: name, team: matches[idx].awayTeam,
-                                   flag: matches[idx].awayFlag, goals: count)
+                        GoalScorer(name: name, team: ourAway.name,
+                                   flag: ourAway.flag, goals: count)
                     }
                     if matches[idx].homeScorers != newHome || matches[idx].awayScorers != newAway {
                         matches[idx].homeScorers = newHome
@@ -311,10 +338,19 @@ final class MatchStore {
         // Fetch lineups for the queued matches (one summary request each).
         var lineupCount = 0
         for target in lineupTargets {
-            guard let lineup = try? await Self.fetchESPNLineup(eventID: target.eventID),
-                  !lineup.isEmpty,
+            guard let fetched = try? await Self.fetchESPNLineup(eventID: target.eventID),
+                  !fetched.isEmpty,
                   let idx = matches.firstIndex(where: { $0.id == target.matchID }),
                   matches[idx].lineup?.isEmpty ?? true else { continue }
+            // Swap sides if ESPN's home/away orientation is reversed vs ours.
+            let lineup = target.reversed
+                ? LineupData(homeStarting: fetched.awayStarting,
+                             homeBench:    fetched.awayBench,
+                             homeCoach:    fetched.awayCoach,
+                             awayStarting: fetched.homeStarting,
+                             awayBench:    fetched.homeBench,
+                             awayCoach:    fetched.homeCoach)
+                : fetched
             matches[idx].lineup = lineup
             lineupCount += 1
             anyChange = true
@@ -478,6 +514,7 @@ private struct ESPNScoreboard: Decodable {
 
 private struct ESPNEvent: Decodable {
     let id: String
+    let date: String?
     let competitions: [ESPNCompetition]
 }
 
