@@ -4,6 +4,67 @@
 
 import SwiftUI
 
+// MARK: - Confederations
+
+/// The six football confederations, used to break down qualified teams by continent.
+enum Confederation: String, CaseIterable {
+    case uefa     = "UEFA"
+    case conmebol = "CONMEBOL"
+    case caf      = "CAF"
+    case afc      = "AFC"
+    case concacaf = "CONCACAF"
+    case ofc      = "OFC"
+
+    /// Short French continent label.
+    var label: String {
+        switch self {
+        case .uefa:     return "Europe"
+        case .conmebol: return "Am. du Sud"
+        case .caf:      return "Afrique"
+        case .afc:      return "Asie"
+        case .concacaf: return "Am. N./C."
+        case .ofc:      return "Océanie"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .uefa:     return .blue
+        case .conmebol: return .green
+        case .caf:      return .orange
+        case .afc:      return .red
+        case .concacaf: return .purple
+        case .ofc:      return .teal
+        }
+    }
+}
+
+/// Maps every team name used in the tournament to its confederation.
+let teamConfederations: [String: Confederation] = [
+    // UEFA
+    "Espagne": .uefa, "France": .uefa, "Angleterre": .uefa, "Portugal": .uefa,
+    "Pays-Bas": .uefa, "Belgique": .uefa, "Allemagne": .uefa, "Croatie": .uefa,
+    "Italie": .uefa, "Suisse": .uefa, "Danemark": .uefa, "Turquie": .uefa,
+    "Autriche": .uefa, "Norvège": .uefa, "Suède": .uefa, "Écosse": .uefa,
+    "Tchéquie": .uefa, "Bosnie-Herzégovine": .uefa,
+    // CONMEBOL
+    "Argentine": .conmebol, "Brésil": .conmebol, "Colombie": .conmebol,
+    "Uruguay": .conmebol, "Équateur": .conmebol, "Paraguay": .conmebol,
+    // CAF
+    "Maroc": .caf, "Sénégal": .caf, "Algérie": .caf, "Égypte": .caf,
+    "Côte d'Ivoire": .caf, "Tunisie": .caf, "Afrique du Sud": .caf,
+    "Ghana": .caf, "RD Congo": .caf, "Cap-Vert": .caf,
+    // AFC
+    "Japon": .afc, "Iran": .afc, "Corée du Sud": .afc, "Australie": .afc,
+    "Qatar": .afc, "Arabie Saoudite": .afc, "Irak": .afc, "Jordanie": .afc,
+    "Ouzbékistan": .afc,
+    // CONCACAF
+    "Mexique": .concacaf, "États-Unis": .concacaf, "Canada": .concacaf,
+    "Panama": .concacaf, "Haïti": .concacaf, "Curaçao": .concacaf,
+    // OFC
+    "Nouvelle-Zélande": .ofc,
+]
+
 // MARK: - Root view
 
 struct BracketView: View {
@@ -19,6 +80,9 @@ struct BracketView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 stagePicker
+                if !continentStats.isEmpty {
+                    continentBar
+                }
                 ScrollView {
                     LazyVStack(spacing: 10) {
                         ForEach(stageMatches) { match in
@@ -82,6 +146,54 @@ struct BracketView: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
+        }
+    }
+
+    // MARK: - Continent stats
+
+    /// Distinct qualified teams in the selected stage, counted per confederation,
+    /// sorted most-represented first. Unresolved placeholders are ignored.
+    private var continentStats: [(conf: Confederation, count: Int)] {
+        var teamsByConf: [Confederation: Set<String>] = [:]
+        for match in stageMatches {
+            for placeholder in [match.homeTeam, match.awayTeam] {
+                let resolved = store.resolveTeam(placeholder)
+                guard resolved.flag != "🏳️",
+                      let conf = teamConfederations[resolved.name] else { continue }
+                teamsByConf[conf, default: []].insert(resolved.name)
+            }
+        }
+        return Confederation.allCases.compactMap { conf in
+            let n = teamsByConf[conf]?.count ?? 0
+            return n > 0 ? (conf, n) : nil
+        }
+        .sorted { $0.count > $1.count }
+    }
+
+    private var continentBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                ForEach(continentStats, id: \.conf) { stat in
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(stat.conf.color)
+                            .frame(width: 7, height: 7)
+                        Text(stat.conf.rawValue)
+                            .font(.caption2.bold())
+                        Text("\(stat.count)")
+                            .font(.caption2.bold())
+                            .foregroundStyle(stat.conf.color)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemGroupedBackground), in: Capsule())
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
     }
 
