@@ -99,9 +99,24 @@ let teamConfederations: [String: Confederation] = [
 struct BracketView: View {
     @Environment(MatchStore.self) private var store
     @State private var selectedStage: Stage = .roundOf32
-    @State private var matchToEdit: Match? = nil
-    @State private var showConfederationInfo = false
-    @State private var confSelection: ConfederationSelection? = nil
+    @State private var activeSheet: BracketSheet? = nil
+
+    /// A single source of truth for the one sheet this screen can present.
+    /// Stacking several `.sheet` modifiers on the same view is unreliable in
+    /// SwiftUI, so all presentations funnel through this enum.
+    private enum BracketSheet: Identifiable {
+        case score(Match)
+        case confInfo
+        case confTeams(ConfederationSelection)
+
+        var id: String {
+            switch self {
+            case .score(let m):     return "score-\(m.id.uuidString)"
+            case .confInfo:         return "info"
+            case .confTeams(let s): return "teams-\(s.id)"
+            }
+        }
+    }
 
     private let knockoutStages: [Stage] = [
         .roundOf32, .roundOf16, .quarterFinal, .semiFinal, .thirdPlace, .final_
@@ -126,7 +141,7 @@ struct BracketView: View {
                                 display.homeFlag = home.flag
                                 display.awayTeam = away.name
                                 display.awayFlag = away.flag
-                                matchToEdit = display
+                                activeSheet = .score(display)
                             }
                         }
                         if stageMatches.isEmpty {
@@ -146,15 +161,16 @@ struct BracketView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Tableau")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $matchToEdit) { match in
-                ScoreEntryView(match: match)
-                    .environment(store)
-            }
-            .sheet(isPresented: $showConfederationInfo) {
-                ConfederationInfoView()
-            }
-            .sheet(item: $confSelection) { selection in
-                ConfederationTeamsView(selection: selection)
+            .sheet(item: $activeSheet) { sheet in
+                switch sheet {
+                case .score(let match):
+                    ScoreEntryView(match: match)
+                        .environment(store)
+                case .confInfo:
+                    ConfederationInfoView()
+                case .confTeams(let selection):
+                    ConfederationTeamsView(selection: selection)
+                }
             }
         }
     }
@@ -267,7 +283,7 @@ struct BracketView: View {
                     .foregroundStyle(.secondary)
                 ForEach(continentStats, id: \.conf) { stat in
                     Button {
-                        confSelection = confederationSelection(for: stat.conf)
+                        activeSheet = .confTeams(confederationSelection(for: stat.conf))
                     } label: {
                         HStack(spacing: 5) {
                             Circle()
@@ -289,7 +305,7 @@ struct BracketView: View {
                     .buttonStyle(.plain)
                 }
                 Button {
-                    showConfederationInfo = true
+                    activeSheet = .confInfo
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.caption)
