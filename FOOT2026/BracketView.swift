@@ -184,9 +184,24 @@ struct BracketView: View {
 
     // MARK: - Continent stats
 
-    /// Distinct qualified teams in the selected stage, counted per confederation,
-    /// sorted most-represented first. Unresolved placeholders are ignored.
-    private var continentStats: [(conf: Confederation, count: Int)] {
+    /// Number of teams per confederation at kickoff (group stage participants).
+    private var startingTeamsByConf: [Confederation: Int] {
+        var teams: [Confederation: Set<String>] = [:]
+        for match in store.matches where match.stage == .groupStage {
+            for name in [match.homeTeam, match.awayTeam] {
+                if let conf = teamConfederations[name] {
+                    teams[conf, default: []].insert(name)
+                }
+            }
+        }
+        return teams.mapValues(\.count)
+    }
+
+    /// Distinct qualified teams in the selected stage, counted per confederation
+    /// alongside the starting total, sorted most-represented first.
+    /// Unresolved placeholders are ignored.
+    private var continentStats: [(conf: Confederation, count: Int, total: Int)] {
+        let starting = startingTeamsByConf
         var teamsByConf: [Confederation: Set<String>] = [:]
         for match in stageMatches {
             for placeholder in [match.homeTeam, match.awayTeam] {
@@ -198,7 +213,7 @@ struct BracketView: View {
         }
         return Confederation.allCases.compactMap { conf in
             let n = teamsByConf[conf]?.count ?? 0
-            return n > 0 ? (conf, n) : nil
+            return n > 0 ? (conf, n, starting[conf] ?? n) : nil
         }
         .sorted { $0.count > $1.count }
     }
@@ -219,6 +234,9 @@ struct BracketView: View {
                         Text("\(stat.count)")
                             .font(.caption2.bold())
                             .foregroundStyle(stat.conf.color)
+                        Text("/ \(stat.total)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
