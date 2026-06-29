@@ -54,6 +54,17 @@ struct BackupView: View {
     var body: some View {
         NavigationStack {
             List {
+                // MARK: Help
+                Section {
+                    NavigationLink {
+                        HelpView()
+                    } label: {
+                        Label("Aide & règles", systemImage: "questionmark.circle")
+                    }
+                } footer: {
+                    Text("Explique les fonctions de l'application et la répartition de la phase finale.")
+                }
+
                 // MARK: Export
                 Section {
                     Button {
