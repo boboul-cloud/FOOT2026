@@ -48,6 +48,13 @@ actor PlayerPhotoService {
             return img
         }
 
+        // Portrait baked into the app (harvested from Sofascore): permanent,
+        // offline, available on a fresh install without any download.
+        if let img = bundledImage(for: key) {
+            memory[key] = img
+            return img
+        }
+
         if failed.contains(key) { return nil }
 
         if let existing = inFlight[key] { return await existing.value }
@@ -86,6 +93,16 @@ actor PlayerPhotoService {
         }
         store(img, forKey: key)
         return img
+    }
+
+    /// Loads the bundled portrait for a player key, if one was baked in.
+    /// Files are named by the same FNV hash used for the disk cache.
+    private func bundledImage(for key: String) -> UIImage? {
+        let base = (fileName(for: key) as NSString).deletingPathExtension
+        let url = Bundle.main.url(forResource: base, withExtension: "jpg", subdirectory: "PlayerPhotos")
+            ?? Bundle.main.url(forResource: base, withExtension: "jpg")
+        guard let url, let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
     }
 
     private func store(_ image: UIImage?, forKey key: String) {
