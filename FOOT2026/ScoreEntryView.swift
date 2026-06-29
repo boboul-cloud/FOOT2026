@@ -265,8 +265,16 @@ struct ScoreEntryView: View {
         } header: {
             Text("Mon pronostic")
         } footer: {
-            Text("Score exact : 3 points · Bon résultat : 1 point.")
+            Text(predictionFooter)
         }
+    }
+
+    private var predictionFooter: String {
+        var text = "Score exact : 3 points · Bon résultat : 1 point."
+        if match.stage != .groupStage {
+            text += "\nIndiquez le score avant les tirs au but (prolongation comprise)."
+        }
+        return text
     }
 
     private var hasPrediction: Bool {

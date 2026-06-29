@@ -62,7 +62,7 @@ struct PredictionsView: View {
         } header: {
             Text("Score")
         } footer: {
-            Text("Score exact : 3 points · Bon résultat (vainqueur ou nul) : 1 point.")
+            Text("Score exact : 3 points · Bon résultat (vainqueur ou nul) : 1 point. Pour les matchs à élimination directe, le score retenu est celui avant les tirs au but (prolongation comprise).")
         }
     }
 
