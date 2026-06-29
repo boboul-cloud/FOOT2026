@@ -436,10 +436,54 @@ struct LineupDetailSheet: View {
             ?? squad.first { $0.name.lowercased() == name.lowercased() }
     }
 
+    /// The Player whose avatar to show for a lineup entry: the matched squad player
+    /// when available, otherwise a synthetic player so the photo still loads from
+    /// the lineup name (knockout rounds often don't match the stored squads).
+    private func avatarPlayer(for lp: LineupPlayer, team: String) -> Player? {
+        if let found = squadPlayer(number: lp.number, name: lp.name, team: team) {
+            return found
+        }
+        let trimmed = lp.name.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        return Player(
+            id: Self.stableID(forTeam: team, name: trimmed),
+            name: trimmed,
+            number: lp.number ?? 0,
+            position: Self.position(from: lp.position),
+            team: team
+        )
+    }
+
+    /// Maps a Sofascore position letter (G/D/M/F) to the app's Position.
+    private static func position(from raw: String?) -> Position {
+        switch raw?.uppercased() {
+        case "G": return .goalkeeper
+        case "D": return .defender
+        case "F": return .forward
+        default:  return .midfielder
+        }
+    }
+
+    /// Deterministic UUID for a synthetic player so the photo-loading task isn't
+    /// restarted on every render (which would happen with a fresh random UUID).
+    private static func stableID(forTeam team: String, name: String) -> UUID {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in "\(team)|\(name)".utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        let hi = hash, lo = hash ^ 0x9e3779b97f4a7c15
+        func b(_ v: UInt64, _ i: UInt64) -> UInt8 { UInt8((v >> (i * 8)) & 0xff) }
+        return UUID(uuid: (
+            b(hi, 7), b(hi, 6), b(hi, 5), b(hi, 4), b(hi, 3), b(hi, 2), b(hi, 1), b(hi, 0),
+            b(lo, 7), b(lo, 6), b(lo, 5), b(lo, 4), b(lo, 3), b(lo, 2), b(lo, 1), b(lo, 0)
+        ))
+    }
+
     @ViewBuilder
     private func playerRow(player: Binding<LineupPlayer>, team: String) -> some View {
         HStack(spacing: 10) {
-            if let found = squadPlayer(number: player.wrappedValue.number, name: player.wrappedValue.name, team: team) {
+            if let found = avatarPlayer(for: player.wrappedValue, team: team) {
                 PlayerAvatarView(player: found, size: 36)
                     .onTapGesture { selectedPlayer = found }
             } else {
