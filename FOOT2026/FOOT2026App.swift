@@ -11,12 +11,14 @@ import SwiftUI
 struct FOOT2026App: App {
     @State private var store = MatchStore()
     @State private var playerStore = PlayerStore()
+    @State private var predictionStore = PredictionStore()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(store)
                 .environment(playerStore)
+                .environment(predictionStore)
         }
     }
 }

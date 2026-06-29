@@ -54,15 +54,20 @@ struct BackupView: View {
     var body: some View {
         NavigationStack {
             List {
-                // MARK: Help
+                // MARK: Predictions & Help
                 Section {
+                    NavigationLink {
+                        PredictionsView()
+                    } label: {
+                        Label("Mes pronostics", systemImage: "target")
+                    }
                     NavigationLink {
                         HelpView()
                     } label: {
                         Label("Aide & règles", systemImage: "questionmark.circle")
                     }
                 } footer: {
-                    Text("Explique les fonctions de l'application et la répartition de la phase finale.")
+                    Text("Pronostiquez les scores depuis chaque match. L'aide explique les fonctions et la répartition de la phase finale.")
                 }
 
                 // MARK: Export

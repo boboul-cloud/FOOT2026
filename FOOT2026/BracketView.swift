@@ -27,7 +27,10 @@ enum Confederation: String, CaseIterable {
         }
     }
 
-    var color: Color {
+    var
+    
+    
+    color: Color {
         switch self {
         case .uefa:     return .blue
         case .conmebol: return .green
@@ -98,6 +101,7 @@ let teamConfederations: [String: Confederation] = [
 
 struct BracketView: View {
     @Environment(MatchStore.self) private var store
+    @Environment(PredictionStore.self) private var predictionStore
     @State private var selectedStage: Stage = .roundOf32
     @State private var activeSheet: BracketSheet? = nil
 
@@ -166,6 +170,7 @@ struct BracketView: View {
                 case .score(let match):
                     ScoreEntryView(match: match)
                         .environment(store)
+                        .environment(predictionStore)
                 case .confInfo:
                     ConfederationInfoView()
                 case .confTeams(let selection):

@@ -9,6 +9,7 @@ import SwiftUI
 struct MatchesView: View {
 
     @Environment(MatchStore.self) private var store
+    @Environment(PredictionStore.self) private var predictionStore
     @State private var selectedStage: Stage? = .groupStage
     @State private var selectedGroup: Group? = nil
     @State private var todayOnly = false
@@ -146,6 +147,7 @@ struct MatchesView: View {
             .sheet(item: $matchToEdit) { match in
                 ScoreEntryView(match: match)
                     .environment(store)
+                    .environment(predictionStore)
             }
             .alert(fetchMessage ?? "", isPresented: Binding(
                 get: { fetchMessage != nil },

@@ -7,10 +7,13 @@ import SwiftUI
 struct ScoreEntryView: View {
     let match: Match
     @Environment(MatchStore.self) private var store
+    @Environment(PredictionStore.self) private var predictions
     @Environment(\.dismiss) private var dismiss
 
     @State private var homeText: String = ""
     @State private var awayText: String = ""
+    @State private var predHomeText: String = ""
+    @State private var predAwayText: String = ""
     @State private var homeScorers: [GoalScorer] = []
     @State private var awayScorers: [GoalScorer] = []
     @State private var matchLink: String = ""
@@ -53,6 +56,9 @@ struct ScoreEntryView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
+
+                // My prediction
+                predictionSection
 
                 // Home scorers
                 scorersSection(
@@ -202,7 +208,86 @@ struct ScoreEntryView: View {
                 homeScorers = match.homeScorers
                 awayScorers = match.awayScorers
                 matchLink = match.matchLink ?? ""
+                if let p = predictions.prediction(for: match.id) {
+                    predHomeText = "\(p.home)"
+                    predAwayText = "\(p.away)"
+                }
             }
+        }
+    }
+
+    // MARK: - Prediction section
+
+    @ViewBuilder
+    private var predictionSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Text(match.homeFlag)
+                scoreField(text: $predHomeText)
+                Text("—").font(.title3.bold()).foregroundStyle(.secondary)
+                scoreField(text: $predAwayText)
+                Text(match.awayFlag)
+                Spacer()
+                if hasPrediction {
+                    Button {
+                        predictions.clear(matchID: match.id)
+                        predHomeText = ""; predAwayText = ""
+                    } label: {
+                        Image(systemName: "trash").foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            if let ph = Int(predHomeText), let pa = Int(predAwayText) {
+                Button {
+                    predictions.setPrediction(home: ph, away: pa, for: match.id)
+                } label: {
+                    Label(hasPrediction ? "Mettre à jour le pronostic" : "Enregistrer le pronostic",
+                          systemImage: "target")
+                        .font(.subheadline)
+                }
+                .tint(.purple)
+            }
+
+            if let outcome = predictions.outcome(for: currentMatch ?? match),
+               outcome != .pending {
+                HStack {
+                    Text(outcomeLabel(outcome))
+                        .font(.subheadline.bold())
+                        .foregroundStyle(outcomeColor(outcome))
+                    Spacer()
+                    Text("+\(outcome.points) pt\(outcome.points > 1 ? "s" : "")")
+                        .font(.subheadline.bold().monospaced())
+                        .foregroundStyle(outcomeColor(outcome))
+                }
+            }
+        } header: {
+            Text("Mon pronostic")
+        } footer: {
+            Text("Score exact : 3 points · Bon résultat : 1 point.")
+        }
+    }
+
+    private var hasPrediction: Bool {
+        predictions.prediction(for: match.id) != nil
+    }
+
+    private func outcomeLabel(_ o: PredictionOutcome) -> String {
+        switch o {
+        case .exact:   return "Score exact 🎯"
+        case .correct: return "Bon résultat ✅"
+        case .wrong:   return "Raté ❌"
+        case .pending: return ""
+        }
+    }
+
+    private func outcomeColor(_ o: PredictionOutcome) -> Color {
+        switch o {
+        case .exact:   return .green
+        case .correct: return .blue
+        case .wrong:   return .red
+        case .pending: return .secondary
         }
     }
 
