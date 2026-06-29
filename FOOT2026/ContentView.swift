@@ -11,22 +11,22 @@ struct ContentView: View {
     var body: some View {
         TabView {
             Tab("Matchs", systemImage: "list.bullet") {
-                MatchesView()
+                MatchesView().pinchToZoom()
             }
             Tab("Classement", systemImage: "chart.bar.fill") {
-                StandingsView()
+                StandingsView().pinchToZoom()
             }
             Tab("Buteurs", systemImage: "soccerball") {
-                ScorersView()
+                ScorersView().pinchToZoom()
             }
             Tab("Tableau", systemImage: "trophy.fill") {
-                BracketView()
+                BracketView().pinchToZoom()
             }
             Tab("Joueurs", systemImage: "person.2.fill") {
-                PlayersView()
+                PlayersView().pinchToZoom()
             }
             Tab("Réglages", systemImage: "gearshape.fill") {
-                BackupView()
+                BackupView().pinchToZoom()
             }
         }
     }

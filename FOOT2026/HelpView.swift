@@ -5,6 +5,8 @@
 import SwiftUI
 
 struct HelpView: View {
+    @State private var deepDiveExpanded = false
+
     var body: some View {
         List {
             introSection
@@ -114,7 +116,7 @@ struct HelpView: View {
 
     private var deepDiveSection: some View {
         Section {
-            DisclosureGroup {
+            DisclosureGroup(isExpanded: $deepDiveExpanded) {
                 VStack(alignment: .leading, spacing: 14) {
                     Text("Le tableau est figé dès le tirage (pour le calendrier et la billetterie), mais on ignore à l'avance lesquels des 12 troisièmes finiront dans le top 8. La FIFA publie donc une table qui couvre les **495 combinaisons** possibles de groupes qualifiés et affecte, pour chacune, chaque troisième à un match précis.")
                         .font(.caption)
