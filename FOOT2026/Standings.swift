@@ -61,15 +61,72 @@ extension MatchStore {
             }
         }
 
-        return stats.values.sorted(by: standingsOrder)
+        return rankGroup(Array(stats.values), matches: groupMatches)
     }
 
-    /// Comparison predicate: Points > DB > BM > alphabetical
+    /// Overall comparison predicate (FIFA criteria 1–3): Points > DB > BM,
+    /// then alphabetical as a stable fallback.
+    /// Used directly for cross-group rankings (e.g. the best third-placed teams,
+    /// who never meet in the group stage so head-to-head doesn't apply).
     func standingsOrder(_ a: TeamStanding, _ b: TeamStanding) -> Bool {
         if a.points != b.points { return a.points > b.points }
         if a.goalDifference != b.goalDifference { return a.goalDifference > b.goalDifference }
         if a.goalsFor != b.goalsFor { return a.goalsFor > b.goalsFor }
         return a.team < b.team
+    }
+
+    /// FIFA World Cup group ranking:
+    ///   1. points (all matches)  2. goal difference (all)  3. goals scored (all)
+    /// then, between teams still level, the head-to-head sub-table among them:
+    ///   4. points  5. goal difference  6. goals scored (matches between them only)
+    /// then alphabetical. (Fair-play and drawing of lots aren't tracked.)
+    func rankGroup(_ teams: [TeamStanding], matches: [Match]) -> [TeamStanding] {
+        let overall = teams.sorted(by: standingsOrder)
+        var result: [TeamStanding] = []
+        var i = 0
+        while i < overall.count {
+            var j = i + 1
+            while j < overall.count && levelOnOverall(overall[i], overall[j]) { j += 1 }
+            if j - i > 1 {
+                result.append(contentsOf: breakTie(Array(overall[i..<j]), matches: matches))
+            } else {
+                result.append(overall[i])
+            }
+            i = j
+        }
+        return result
+    }
+
+    /// True when two teams are equal on the three overall criteria.
+    private func levelOnOverall(_ a: TeamStanding, _ b: TeamStanding) -> Bool {
+        a.points == b.points
+            && a.goalDifference == b.goalDifference
+            && a.goalsFor == b.goalsFor
+    }
+
+    /// Re-orders teams tied on the overall criteria using only the matches
+    /// played between them (the FIFA head-to-head sub-table).
+    private func breakTie(_ tied: [TeamStanding], matches: [Match]) -> [TeamStanding] {
+        let names = Set(tied.map(\.team))
+        var pts = [String: Int](), gd = [String: Int](), gf = [String: Int]()
+        for t in tied { pts[t.team] = 0; gd[t.team] = 0; gf[t.team] = 0 }
+
+        for m in matches where m.hasScore
+            && names.contains(m.homeTeam) && names.contains(m.awayTeam) {
+            let h = m.homeScore!, a = m.awayScore!
+            gf[m.homeTeam, default: 0] += h; gd[m.homeTeam, default: 0] += h - a
+            gf[m.awayTeam, default: 0] += a; gd[m.awayTeam, default: 0] += a - h
+            if h > a { pts[m.homeTeam, default: 0] += 3 }
+            else if a > h { pts[m.awayTeam, default: 0] += 3 }
+            else { pts[m.homeTeam, default: 0] += 1; pts[m.awayTeam, default: 0] += 1 }
+        }
+
+        return tied.sorted { x, y in
+            if pts[x.team] != pts[y.team] { return pts[x.team]! > pts[y.team]! }
+            if gd[x.team]  != gd[y.team]  { return gd[x.team]!  > gd[y.team]!  }
+            if gf[x.team]  != gf[y.team]  { return gf[x.team]!  > gf[y.team]!  }
+            return x.team < y.team
+        }
     }
 
     var allGroupStandings: [(group: Group, standings: [TeamStanding])] {
