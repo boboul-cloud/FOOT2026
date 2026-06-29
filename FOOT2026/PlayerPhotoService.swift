@@ -54,7 +54,7 @@ actor PlayerPhotoService {
 
         let task = Task<UIImage?, Never> { [weak self] in
             guard let self else { return nil }
-            let img = await Self.fetchFromWikipedia(name: name)
+            let img = await Self.fetchPortrait(team: team, name: name)
             if let img, let data = img.jpegData(compressionQuality: 0.85) {
                 try? data.write(to: file)
             }
@@ -73,6 +73,76 @@ actor PlayerPhotoService {
         } else {
             failed.insert(key)
         }
+    }
+
+    // MARK: - Portrait lookup (Sofascore first, Wikipedia fallback)
+
+    /// Tries Sofascore (football-specific, matches the user's manual source),
+    /// then falls back to Wikipedia.
+    private static func fetchPortrait(team: String, name: String) async -> UIImage? {
+        if let img = await fetchFromSofascore(team: team, name: name) { return img }
+        return await fetchFromWikipedia(name: name)
+    }
+
+    // MARK: - Sofascore lookup
+
+    /// Adds the browser-like headers Sofascore expects (same as lineup import).
+    private static func sofascoreHeaders(_ request: inout URLRequest) {
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            forHTTPHeaderField: "User-Agent")
+        request.setValue("https://www.sofascore.com", forHTTPHeaderField: "Referer")
+    }
+
+    /// Finds the player on Sofascore (preferring the right nationality) and
+    /// returns their official headshot.
+    private static func fetchFromSofascore(team: String, name: String) async -> UIImage? {
+        guard let id = await sofascorePlayerID(name: name, alpha2: alpha2(forTeam: team)) else {
+            return nil
+        }
+        guard let url = URL(string: "https://api.sofascore.com/api/v1/player/\(id)/image") else {
+            return nil
+        }
+        var request = URLRequest(url: url)
+        sofascoreHeaders(&request)
+        guard let (data, resp) = try? await URLSession.shared.data(for: request),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              data.count > 800,                 // skip empty / placeholder blobs
+              let img = UIImage(data: data) else { return nil }
+        return img
+    }
+
+    /// Searches Sofascore for a player by name. Among the player results, prefers
+    /// one whose nationality matches `alpha2`; otherwise takes the best match.
+    private static func sofascorePlayerID(name: String, alpha2: String?) async -> Int? {
+        var comps = URLComponents(string: "https://api.sofascore.com/api/v1/search/all")
+        comps?.queryItems = [.init(name: "q", value: name)]
+        guard let url = comps?.url else { return nil }
+        var request = URLRequest(url: url)
+        sofascoreHeaders(&request)
+        guard let (data, resp) = try? await URLSession.shared.data(for: request),
+              (resp as? HTTPURLResponse)?.statusCode == 200,
+              let decoded = try? JSONDecoder().decode(SofaSearch.self, from: data) else { return nil }
+
+        let players = (decoded.results ?? [])
+            .filter { $0.type == "player" }
+            .compactMap(\.entity)
+        if let alpha2,
+           let match = players.first(where: { $0.country?.alpha2?.uppercased() == alpha2 }) {
+            return match.id
+        }
+        return players.first?.id
+    }
+
+    /// ISO alpha-2 code derived from the team's flag emoji (two regional
+    /// indicator symbols → "FR", "BR", …). Returns nil for non-standard flags
+    /// (e.g. England's subdivision flag), in which case nationality isn't filtered.
+    private static func alpha2(forTeam team: String) -> String? {
+        guard let flag = teamFlags[team] else { return nil }
+        let scalars = flag.unicodeScalars.filter { (0x1F1E6...0x1F1FF).contains($0.value) }
+        guard scalars.count == 2 else { return nil }
+        let letters = scalars.map { Character(UnicodeScalar($0.value - 0x1F1E6 + 0x41)!) }
+        return String(letters)
     }
 
     // MARK: - Wikipedia lookup
@@ -139,6 +209,23 @@ actor PlayerPhotoService {
     }
     private struct WikiThumb: Decodable {
         let source: String
+    }
+
+    // MARK: - Sofascore search response models
+
+    private struct SofaSearch: Decodable {
+        let results: [Result]?
+        struct Result: Decodable {
+            let type: String?
+            let entity: Entity?
+        }
+        struct Entity: Decodable {
+            let id: Int?
+            let country: Country?
+        }
+        struct Country: Decodable {
+            let alpha2: String?
+        }
     }
 }
 
