@@ -46,11 +46,12 @@ struct MatchesView: View {
                         .listRowBackground(Color.clear)
                     }
                     ForEach(filteredMatches) { match in
-                        MatchRowView(match: match,
+                        let display = resolved(match)
+                        MatchRowView(match: display,
                                      chronoRank: chronoRank[match.id] ?? 0,
                                      live: store.liveStatuses[match.id])
                             .contentShape(Rectangle())
-                            .onTapGesture { matchToEdit = match }
+                            .onTapGesture { matchToEdit = display }
                             .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
@@ -246,6 +247,23 @@ struct MatchesView: View {
         }
     }
 
+    // MARK: - Team resolution
+
+    /// Resolves knockout placeholders ("1er Gr.A", "V.M73") to the real teams so the
+    /// rounds behave exactly like the group stage — real names/flags and editable
+    /// scores. Group-stage matches already have real names and pass through unchanged.
+    private func resolved(_ match: Match) -> Match {
+        guard match.stage != .groupStage else { return match }
+        var m = match
+        let home = store.resolveTeam(match.homeTeam)
+        let away = store.resolveTeam(match.awayTeam)
+        m.homeTeam = home.name
+        m.homeFlag = home.flag
+        m.awayTeam = away.name
+        m.awayFlag = away.flag
+        return m
+    }
+
     // MARK: - Chronological rank (global, all 104 matches sorted by date)
     private var chronoRank: [UUID: Int] {
         let sorted = store.matches.sorted { $0.date < $1.date }
@@ -286,13 +304,14 @@ struct MatchesView: View {
             list = list.filter { $0.group == group }
         }
 
-        // Search
+        // Search (matches the resolved team names so knockout rounds are searchable too)
         if !searchText.isEmpty {
             let q = searchText.lowercased()
-            list = list.filter {
-                $0.homeTeam.lowercased().contains(q) ||
-                $0.awayTeam.lowercased().contains(q) ||
-                $0.city.lowercased().contains(q)
+            list = list.filter { m in
+                let r = resolved(m)
+                return r.homeTeam.lowercased().contains(q) ||
+                       r.awayTeam.lowercased().contains(q) ||
+                       m.city.lowercased().contains(q)
             }
         }
 
@@ -359,8 +378,10 @@ struct MatchRowView: View {
                 }
                 if let live {
                     liveBadge(live)
-                } else {
+                } else if match.group != nil {
                     groupBadge
+                } else {
+                    stageBadge
                 }
                 broadcasterBadges
             }
@@ -427,6 +448,30 @@ struct MatchRowView: View {
                 .padding(.vertical, 2)
                 .background(Color.accentColor.opacity(0.15), in: Capsule())
                 .foregroundStyle(Color.accentColor)
+        }
+    }
+
+    @ViewBuilder
+    private var stageBadge: some View {
+        if match.stage != .groupStage {
+            Text(stageShortName)
+                .font(.caption2)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.accentColor.opacity(0.15), in: Capsule())
+                .foregroundStyle(Color.accentColor)
+        }
+    }
+
+    private var stageShortName: String {
+        switch match.stage {
+        case .roundOf32:    return "1/32"
+        case .roundOf16:    return "1/16"
+        case .quarterFinal: return "1/4"
+        case .semiFinal:    return "1/2"
+        case .thirdPlace:   return "3e"
+        case .final_:       return "Finale"
+        case .groupStage:   return ""
         }
     }
 
