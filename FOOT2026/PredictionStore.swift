@@ -60,7 +60,7 @@ final class PredictionStore {
     // MARK: - Scoring (pure, so it's directly unit-testable)
 
     /// Compares a prediction to a match result. Pure — no stored state.
-    nonisolated static func outcome(of p: Prediction, against match: Match) -> PredictionOutcome {
+    static func outcome(of p: Prediction, against match: Match) -> PredictionOutcome {
         guard let h = match.homeScore, let a = match.awayScore else { return .pending }
         if p.home == h && p.away == a { return .exact }
         return sameSign(p.home - p.away, h - a) ? .correct : .wrong
@@ -77,7 +77,7 @@ final class PredictionStore {
     }
 
     /// Pure aggregation: counts every match for which `lookup` returns a prediction.
-    nonisolated static func summary(
+    static func summary(
         of matches: [Match],
         lookup: (Match) -> Prediction?
     ) -> Summary {
@@ -97,7 +97,7 @@ final class PredictionStore {
         return s
     }
 
-    private nonisolated static func sameSign(_ x: Int, _ y: Int) -> Bool {
+    private static func sameSign(_ x: Int, _ y: Int) -> Bool {
         (x > 0 && y > 0) || (x < 0 && y < 0) || (x == 0 && y == 0)
     }
 
