@@ -67,6 +67,27 @@ actor PlayerPhotoService {
         return result
     }
 
+    /// Forces a fresh download (Sofascore → Wikipedia), overwriting any cached
+    /// image. Used by the per-team "download photos" button so old Wikipedia
+    /// portraits get replaced by the better Sofascore ones.
+    func refresh(forTeam team: String, name: String) async -> UIImage? {
+        let key = "\(team)|\(name)"
+        let file = cacheDir.appendingPathComponent(fileName(for: key))
+
+        // Drop every cached trace for this player.
+        memory[key] = nil
+        failed.remove(key)
+
+        let img = await Self.fetchPortrait(team: team, name: name)
+        if let img, let data = img.jpegData(compressionQuality: 0.85) {
+            try? data.write(to: file)            // overwrite stale image
+        } else {
+            try? FileManager.default.removeItem(at: file)
+        }
+        store(img, forKey: key)
+        return img
+    }
+
     private func store(_ image: UIImage?, forKey key: String) {
         if let image {
             memory[key] = image

@@ -188,7 +188,7 @@ struct TeamSquadView: View {
                 guard next < targets.count else { return }
                 let p = targets[next]
                 next += 1
-                group.addTask { _ = await PlayerPhotoService.shared.image(forTeam: p.team, name: p.name) }
+                group.addTask { _ = await PlayerPhotoService.shared.refresh(forTeam: p.team, name: p.name) }
             }
             for _ in 0..<min(maxConcurrent, targets.count) { addTask() }
             for await _ in group {
