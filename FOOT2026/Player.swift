@@ -43,7 +43,9 @@ struct Player: Identifiable, Codable, Hashable {
 
 // MARK: - Team flags
 
-let teamFlags: [String: String] = [
+// Immutable, Sendable lookup — safe to read from any isolation (e.g. the
+// nonisolated photo service), so it opts out of the project's MainActor default.
+nonisolated let teamFlags: [String: String] = [
     "Argentine":           "🇦🇷",
     "Espagne":             "🇪🇸",
     "France":              "🇫🇷",
