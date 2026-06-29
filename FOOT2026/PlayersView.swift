@@ -94,6 +94,12 @@ struct TeamSquadView: View {
     @Environment(PlayerStore.self) private var playerStore
     @State private var editingPlayer: Player?
 
+    @State private var isPrefetching = false
+    @State private var prefetchDone = 0
+    @State private var prefetchTotal = 0
+    /// Bumped after a bulk download so visible rows reload from the warm cache.
+    @State private var refreshID = UUID()
+
     private var duplicateNumbers: Set<Int> {
         let numbers = players.map { playerStore.number(for: $0) }
         var seen = Set<Int>()
@@ -138,12 +144,61 @@ struct TeamSquadView: View {
                 }
             }
         }
+        .id(refreshID)
         .listStyle(.insetGrouped)
         .navigationTitle("\(teamFlags[team] ?? "") \(team)")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if isPrefetching {
+                    HStack(spacing: 6) {
+                        ProgressView()
+                        Text("\(prefetchDone)/\(prefetchTotal)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button {
+                        Task { await prefetchPhotos() }
+                    } label: {
+                        Image(systemName: "arrow.down.circle")
+                    }
+                    .accessibilityLabel("Télécharger les photos")
+                }
+            }
+        }
         .sheet(item: $editingPlayer) { player in
             PlayerEditSheet(player: player)
         }
+    }
+
+    /// Downloads (and caches) the portrait of every player without a manual
+    /// photo, a few at a time, then refreshes the list to show them.
+    private func prefetchPhotos() async {
+        let targets = players.filter { playerStore.photo(for: $0) == nil }
+        guard !targets.isEmpty else { return }
+        isPrefetching = true
+        prefetchTotal = targets.count
+        prefetchDone = 0
+
+        await withTaskGroup(of: Void.self) { group in
+            let maxConcurrent = 4
+            var next = 0
+            func addTask() {
+                guard next < targets.count else { return }
+                let p = targets[next]
+                next += 1
+                group.addTask { _ = await PlayerPhotoService.shared.image(forTeam: p.team, name: p.name) }
+            }
+            for _ in 0..<min(maxConcurrent, targets.count) { addTask() }
+            for await _ in group {
+                prefetchDone += 1
+                addTask()
+            }
+        }
+
+        isPrefetching = false
+        refreshID = UUID()
     }
 }
 
