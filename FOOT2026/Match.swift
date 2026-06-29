@@ -41,6 +41,7 @@ struct GoalScorer: Identifiable, Codable, Equatable {
     var team: String
     var flag: String
     var goals: Int   // goals scored in this match
+    var isOwnGoal: Bool = false   // true if these goals are own goals (csc)
 }
 
 // MARK: - Lineup Data

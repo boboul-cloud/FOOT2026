@@ -163,25 +163,25 @@ final class MatchStore {
         let team: String
         let flag: String
         let goals: Int
+        let isOwnGoal: Bool
     }
 
     var topScorers: [ScorerStat] {
-        var dict: [String: (team: String, flag: String, goals: Int)] = [:]
+        // Own goals are keyed separately so a csc never merges with a real goal.
+        var dict: [String: (team: String, flag: String, goals: Int, isOwnGoal: Bool)] = [:]
+        func add(_ s: GoalScorer) {
+            let key = "\(s.name)|\(s.team)|\(s.isOwnGoal)"
+            dict[key, default: (s.team, s.flag, 0, s.isOwnGoal)].goals += s.goals
+        }
         for match in matches {
-            for s in match.homeScorers {
-                let key = "\(s.name)|\(s.team)"
-                dict[key, default: (s.team, s.flag, 0)].goals += s.goals
-            }
-            for s in match.awayScorers {
-                let key = "\(s.name)|\(s.team)"
-                dict[key, default: (s.team, s.flag, 0)].goals += s.goals
-            }
+            for s in match.homeScorers { add(s) }
+            for s in match.awayScorers { add(s) }
         }
         return dict
             .map { key, val in
-                let parts = key.split(separator: "|", maxSplits: 1)
-                let name = String(parts[0])
-                return ScorerStat(name: name, team: val.team, flag: val.flag, goals: val.goals)
+                let name = String(key.split(separator: "|", maxSplits: 2)[0])
+                return ScorerStat(name: name, team: val.team, flag: val.flag,
+                                  goals: val.goals, isOwnGoal: val.isOwnGoal)
             }
             .filter { $0.goals > 0 }
             .sorted { $0.goals > $1.goals }
@@ -296,17 +296,21 @@ final class MatchStore {
 
             // Parse goal scorers from competition details (keyed by ESPN side).
             if let details = comp.details {
-                var espnHomeGoals: [String: Int] = [:]
-                var espnAwayGoals: [String: Int] = [:]
+                // Aggregate goals per player; an own goal (csc) is credited to the
+                // benefiting team but kept flagged so it can be labelled as such.
+                var espnHomeGoals: [String: (count: Int, isOwnGoal: Bool)] = [:]
+                var espnAwayGoals: [String: (count: Int, isOwnGoal: Bool)] = [:]
                 for detail in details {
                     guard detail.scoringPlay == true,
                           let athlete = detail.athletesInvolved?.first,
                           let teamRef = detail.team else { continue }
                     let name = athlete.displayName
+                    let isOwnGoal = detail.ownGoal == true
+                        || detail.type.text.lowercased().contains("own goal")
                     if teamRef.id == h.team.id {
-                        espnHomeGoals[name, default: 0] += 1
+                        espnHomeGoals[name, default: (0, isOwnGoal)].count += 1
                     } else if teamRef.id == a.team.id {
-                        espnAwayGoals[name, default: 0] += 1
+                        espnAwayGoals[name, default: (0, isOwnGoal)].count += 1
                     }
                 }
                 if !espnHomeGoals.isEmpty || !espnAwayGoals.isEmpty {
@@ -316,13 +320,15 @@ final class MatchStore {
                     let ourAway = resolveTeam(matches[idx].awayTeam)
                     let homeGoals = reversed ? espnAwayGoals : espnHomeGoals
                     let awayGoals = reversed ? espnHomeGoals : espnAwayGoals
-                    let newHome = homeGoals.map { name, count in
+                    let newHome = homeGoals.map { name, val in
                         GoalScorer(name: name, team: ourHome.name,
-                                   flag: ourHome.flag, goals: count)
+                                   flag: ourHome.flag, goals: val.count,
+                                   isOwnGoal: val.isOwnGoal)
                     }
-                    let newAway = awayGoals.map { name, count in
+                    let newAway = awayGoals.map { name, val in
                         GoalScorer(name: name, team: ourAway.name,
-                                   flag: ourAway.flag, goals: count)
+                                   flag: ourAway.flag, goals: val.count,
+                                   isOwnGoal: val.isOwnGoal)
                     }
                     if matches[idx].homeScorers != newHome || matches[idx].awayScorers != newAway {
                         matches[idx].homeScorers = newHome
@@ -549,6 +555,7 @@ private struct ESPNTeam: Decodable {
 private struct ESPNDetail: Decodable {
     let type: ESPNDetailType
     let scoringPlay: Bool?
+    let ownGoal: Bool?
     let athletesInvolved: [ESPNAthlete]?
     let team: ESPNTeamRef?
 }
