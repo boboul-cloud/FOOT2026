@@ -239,6 +239,11 @@ private struct ScorersRow: View {
                 Text(scorer.team)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if scorer.shootoutGoals > 0 {
+                    Text("dont \(scorer.shootoutGoals) t.a.b.")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
             }
 
             Spacer()
@@ -289,6 +294,11 @@ private struct TeamScorerRow: View {
             Text(scorer.name)
                 .font(.body)
             if scorer.isOwnGoal { CscBadge() }
+            if scorer.shootoutGoals > 0 {
+                Text("dont \(scorer.shootoutGoals) t.a.b.")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
             Spacer()
             HStack(spacing: 4) {
                 Text("\(scorer.goals)")

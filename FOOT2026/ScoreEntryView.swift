@@ -12,6 +12,8 @@ struct ScoreEntryView: View {
 
     @State private var homeText: String = ""
     @State private var awayText: String = ""
+    @State private var homePenText: String = ""
+    @State private var awayPenText: String = ""
     @State private var predHomeText: String = ""
     @State private var predAwayText: String = ""
     @State private var homeScorers: [GoalScorer] = []
@@ -55,6 +57,26 @@ struct ScoreEntryView: View {
                             .foregroundStyle(.tertiary)
                     }
                     .frame(maxWidth: .infinity)
+                }
+
+                // Penalty shootout (knockout matches level after extra time)
+                if showPenalties {
+                    Section {
+                        HStack(spacing: 12) {
+                            Text(match.homeFlag)
+                            scoreField(text: $homePenText)
+                            Text("t.a.b.")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.secondary)
+                            scoreField(text: $awayPenText)
+                            Text(match.awayFlag)
+                        }
+                        .frame(maxWidth: .infinity)
+                    } header: {
+                        Text("Tirs au but")
+                    } footer: {
+                        Text("Match nul après prolongation : indiquez le score des tirs au but pour départager le qualifié.")
+                    }
                 }
 
                 // My prediction
@@ -205,6 +227,8 @@ struct ScoreEntryView: View {
             .onAppear {
                 if let h = match.homeScore { homeText = "\(h)" }
                 if let a = match.awayScore { awayText = "\(a)" }
+                if let ph = match.homePenalties { homePenText = "\(ph)" }
+                if let pa = match.awayPenalties { awayPenText = "\(pa)" }
                 homeScorers = match.homeScorers
                 awayScorers = match.awayScorers
                 matchLink = match.matchLink ?? ""
@@ -309,21 +333,44 @@ struct ScoreEntryView: View {
     ) -> some View {
         Section {
             ForEach(scorers.indices, id: \.self) { i in
-                HStack(spacing: 10) {
-                    Text("⚽️")
-                    TextField("Nom du joueur", text: scorers[i].name)
-                        .frame(maxWidth: .infinity)
-                    Stepper(
-                        "\(scorers[i].goals.wrappedValue)",
-                        value: scorers[i].goals,
-                        in: 1...20
-                    )
-                    .labelsHidden()
-                    .frame(width: 80)
-                    Text("\(scorers[i].goals.wrappedValue) but\(scorers[i].goals.wrappedValue > 1 ? "s" : "")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 48, alignment: .trailing)
+                VStack(spacing: 6) {
+                    HStack(spacing: 10) {
+                        Text("⚽️")
+                        TextField("Nom du joueur", text: scorers[i].name)
+                            .frame(maxWidth: .infinity)
+                        Stepper(
+                            "\(scorers[i].goals.wrappedValue)",
+                            value: scorers[i].goals,
+                            in: 1...20
+                        )
+                        .labelsHidden()
+                        .frame(width: 80)
+                        Text("\(scorers[i].goals.wrappedValue) but\(scorers[i].goals.wrappedValue > 1 ? "s" : "")")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                    // Knockout matches: flag how many of these goals were shootout kicks.
+                    if match.stage != .groupStage {
+                        HStack(spacing: 10) {
+                            Text("🥅").font(.caption)
+                            Text("dont tirs au but")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Stepper(
+                                "\(scorers[i].shootoutGoals.wrappedValue)",
+                                value: scorers[i].shootoutGoals,
+                                in: 0...max(scorers[i].goals.wrappedValue, scorers[i].shootoutGoals.wrappedValue)
+                            )
+                            .labelsHidden()
+                            .frame(width: 80)
+                            Text("\(scorers[i].shootoutGoals.wrappedValue) t.a.b.")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                                .frame(width: 48, alignment: .trailing)
+                        }
+                    }
                 }
             }
             .onDelete { offsets in
@@ -349,11 +396,28 @@ struct ScoreEntryView: View {
         Int(homeText) != nil && Int(awayText) != nil
     }
 
+    /// Shootout entry only makes sense for a knockout match left level on the score.
+    private var showPenalties: Bool {
+        guard match.stage != .groupStage,
+              let h = Int(homeText), let a = Int(awayText) else { return false }
+        return h == a
+    }
+
     private func saveScore() {
         guard let h = Int(homeText), let a = Int(awayText) else { return }
         store.updateScore(matchID: match.id, home: h, away: a)
-        let cleanHome = homeScorers.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
-        let cleanAway = awayScorers.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+        // Persist the shootout score only on a knockout draw; clear it otherwise.
+        if showPenalties, let ph = Int(homePenText), let pa = Int(awayPenText) {
+            store.updatePenalties(matchID: match.id, home: ph, away: pa)
+        } else {
+            store.updatePenalties(matchID: match.id, home: nil, away: nil)
+        }
+        let cleanHome = homeScorers
+            .filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { var s = $0; s.shootoutGoals = min(s.shootoutGoals, s.goals); return s }
+        let cleanAway = awayScorers
+            .filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }
+            .map { var s = $0; s.shootoutGoals = min(s.shootoutGoals, s.goals); return s }
         store.updateScorers(matchID: match.id, homeScorers: cleanHome, awayScorers: cleanAway)
         store.updateMatchLink(matchID: match.id, link: matchLink)
         dismiss()

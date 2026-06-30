@@ -191,13 +191,12 @@ extension MatchStore {
         if (isWinner || isLoser), let n = Int(placeholder.dropFirst(3)) {
             let uid = String(format: "00000000-0000-4000-8000-%012d", n).lowercased()
             if let m = matches.first(where: { $0.id.uuidString.lowercased() == uid }) {
-                if let h = m.homeScore, let a = m.awayScore {
-                    if isWinner {
-                        if h > a { return resolveTeam(m.homeTeam, depth: depth + 1) }
-                        if a > h { return resolveTeam(m.awayTeam, depth: depth + 1) }
-                    } else {
-                        if h < a { return resolveTeam(m.homeTeam, depth: depth + 1) }
-                        if a < h { return resolveTeam(m.awayTeam, depth: depth + 1) }
+                if m.hasScore {
+                    // winnerSide breaks a draw after extra time using the shootout score.
+                    if let side = m.winnerSide {
+                        let winnerIsHome = side == .home
+                        let pickHome = isWinner ? winnerIsHome : !winnerIsHome
+                        return resolveTeam(pickHome ? m.homeTeam : m.awayTeam, depth: depth + 1)
                     }
                     return ("?", "🏳️") // draw without shootout info
                 }

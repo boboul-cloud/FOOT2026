@@ -373,6 +373,12 @@ struct MatchRowView: View {
                         .font(.title3.bold())
                         .monospacedDigit()
                         .foregroundStyle(live != nil ? Color.red : .primary)
+                    if match.hasShootout, let ph = match.homePenalties, let pa = match.awayPenalties {
+                        Text("t.a.b. \(ph) - \(pa)")
+                            .font(.caption2.bold())
+                            .foregroundStyle(.orange)
+                            .monospacedDigit()
+                    }
                 } else {
                     Text("vs")
                         .font(.subheadline)

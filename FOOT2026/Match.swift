@@ -40,8 +40,33 @@ struct GoalScorer: Identifiable, Codable, Equatable {
     var name: String
     var team: String
     var flag: String
-    var goals: Int   // goals scored in this match
+    var goals: Int   // goals scored in this match (penalty-shootout conversions included)
     var isOwnGoal: Bool = false   // true if these goals are own goals (csc)
+    var shootoutGoals: Int = 0    // subset of `goals` converted in the penalty shootout (t.a.b.)
+
+    init(id: UUID = UUID(), name: String, team: String, flag: String,
+         goals: Int, isOwnGoal: Bool = false, shootoutGoals: Int = 0) {
+        self.id = id
+        self.name = name
+        self.team = team
+        self.flag = flag
+        self.goals = goals
+        self.isOwnGoal = isOwnGoal
+        self.shootoutGoals = shootoutGoals
+    }
+
+    // Custom decoding so scores saved before `shootoutGoals` existed still load
+    // (the synthesized decoder would throw on the missing key, wiping every score).
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try c.decode(String.self, forKey: .name)
+        team = try c.decode(String.self, forKey: .team)
+        flag = try c.decode(String.self, forKey: .flag)
+        goals = try c.decode(Int.self, forKey: .goals)
+        isOwnGoal = try c.decodeIfPresent(Bool.self, forKey: .isOwnGoal) ?? false
+        shootoutGoals = try c.decodeIfPresent(Int.self, forKey: .shootoutGoals) ?? 0
+    }
 }
 
 // MARK: - Lineup Data
@@ -81,6 +106,9 @@ struct Match: Identifiable, Codable {
     var group: Group?
     var homeScore: Int?
     var awayScore: Int?
+    /// Penalty-shootout score, only set for a knockout match level after extra time.
+    var homePenalties: Int? = nil
+    var awayPenalties: Int? = nil
     var homeScorers: [GoalScorer] = []
     var awayScorers: [GoalScorer] = []
     var matchLink: String? = nil
@@ -88,6 +116,30 @@ struct Match: Identifiable, Codable {
     var lineup: LineupData? = nil
 
     var hasScore: Bool { homeScore != nil && awayScore != nil }
+
+    /// True when the match went to a penalty shootout (both shootout scores set).
+    var hasShootout: Bool { homePenalties != nil && awayPenalties != nil }
+
+    enum WinnerSide { case home, away }
+
+    /// The winning side, breaking a draw after extra time with the shootout score.
+    /// `nil` while the match is unplayed or level with no shootout recorded.
+    var winnerSide: WinnerSide? {
+        guard let h = homeScore, let a = awayScore else { return nil }
+        if h > a { return .home }
+        if a > h { return .away }
+        if let ph = homePenalties, let pa = awayPenalties {
+            if ph > pa { return .home }
+            if pa > ph { return .away }
+        }
+        return nil
+    }
+
+    /// "1 - 1 (t.a.b. 4 - 3)" when a shootout decided the match, else "1 - 1".
+    var scoreTextWithShootout: String {
+        guard hasShootout, let ph = homePenalties, let pa = awayPenalties else { return scoreText }
+        return "\(scoreText) (t.a.b. \(ph) - \(pa))"
+    }
 
     /// True once both teams are determined (group stage, or a knockout match whose
     /// participants are known). Placeholder fixtures use the 🏳️ flag.

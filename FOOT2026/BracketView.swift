@@ -392,6 +392,12 @@ struct BracketMatchCard: View {
                         Text(match.scoreText)
                             .font(.title2.bold())
                             .monospacedDigit()
+                        if match.hasShootout, let ph = match.homePenalties, let pa = match.awayPenalties {
+                            Text("t.a.b. \(ph) - \(pa)")
+                                .font(.caption2.bold())
+                                .foregroundStyle(.orange)
+                                .monospacedDigit()
+                        }
                     } else {
                         Text("vs")
                             .font(.subheadline)
@@ -453,10 +459,11 @@ struct BracketMatchCard: View {
     private enum TeamSide { case home, away }
 
     private var matchWinner: TeamSide? {
-        guard let h = match.homeScore, let a = match.awayScore else { return nil }
-        if h > a { return .home }
-        if a > h { return .away }
-        return nil
+        switch match.winnerSide {
+        case .home: return .home
+        case .away: return .away
+        case nil:   return nil
+        }
     }
 
     private var cardBackground: Color {

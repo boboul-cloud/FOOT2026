@@ -92,6 +92,8 @@ final class MatchStore {
                     var m = fixture
                     m.homeScore = saved.homeScore
                     m.awayScore = saved.awayScore
+                    m.homePenalties = saved.homePenalties
+                    m.awayPenalties = saved.awayPenalties
                     m.homeScorers = saved.homeScorers
                     m.awayScorers = saved.awayScorers
                     m.matchLink = saved.matchLink
@@ -123,8 +125,18 @@ final class MatchStore {
         guard let idx = matches.firstIndex(where: { $0.id == matchID }) else { return }
         matches[idx].homeScore = nil
         matches[idx].awayScore = nil
+        matches[idx].homePenalties = nil
+        matches[idx].awayPenalties = nil
         matches[idx].homeScorers = []
         matches[idx].awayScorers = []
+        save()
+    }
+
+    /// Sets (or clears, with nil) the penalty-shootout score for a knockout match.
+    func updatePenalties(matchID: UUID, home: Int?, away: Int?) {
+        guard let idx = matches.firstIndex(where: { $0.id == matchID }) else { return }
+        matches[idx].homePenalties = home
+        matches[idx].awayPenalties = away
         save()
     }
 
@@ -162,16 +174,20 @@ final class MatchStore {
         let name: String
         let team: String
         let flag: String
-        let goals: Int
+        let goals: Int          // total, penalty-shootout conversions included
+        let shootoutGoals: Int  // of which scored in a penalty shootout (t.a.b.)
         let isOwnGoal: Bool
     }
 
     var topScorers: [ScorerStat] {
         // Own goals are keyed separately so a csc never merges with a real goal.
-        var dict: [String: (team: String, flag: String, goals: Int, isOwnGoal: Bool)] = [:]
+        var dict: [String: (team: String, flag: String, goals: Int, shootoutGoals: Int, isOwnGoal: Bool)] = [:]
         func add(_ s: GoalScorer) {
             let key = "\(s.name)|\(s.team)|\(s.isOwnGoal)"
-            dict[key, default: (s.team, s.flag, 0, s.isOwnGoal)].goals += s.goals
+            var entry = dict[key] ?? (s.team, s.flag, 0, 0, s.isOwnGoal)
+            entry.goals += s.goals
+            entry.shootoutGoals += s.shootoutGoals
+            dict[key] = entry
         }
         for match in matches {
             for s in match.homeScorers { add(s) }
@@ -181,7 +197,8 @@ final class MatchStore {
             .map { key, val in
                 let name = String(key.split(separator: "|", maxSplits: 2)[0])
                 return ScorerStat(name: name, team: val.team, flag: val.flag,
-                                  goals: val.goals, isOwnGoal: val.isOwnGoal)
+                                  goals: val.goals, shootoutGoals: val.shootoutGoals,
+                                  isOwnGoal: val.isOwnGoal)
             }
             .filter { $0.goals > 0 }
             .sorted { $0.goals > $1.goals }
@@ -294,25 +311,63 @@ final class MatchStore {
                 anyChange = true
             }
 
+            // Penalty-shootout score (only present when a shootout decided the tie),
+            // re-oriented onto our home/away so the next round resolves its winner.
+            let hPens = reversed ? Int(a.shootoutScore ?? "") : Int(h.shootoutScore ?? "")
+            let aPens = reversed ? Int(h.shootoutScore ?? "") : Int(a.shootoutScore ?? "")
+            if matches[idx].homePenalties != hPens || matches[idx].awayPenalties != aPens {
+                matches[idx].homePenalties = hPens
+                matches[idx].awayPenalties = aPens
+                anyChange = true
+            }
+
             // Parse goal scorers from competition details (keyed by ESPN side).
             if let details = comp.details {
-                // Aggregate goals per player; an own goal (csc) is credited to the
-                // benefiting team but kept flagged so it can be labelled as such.
-                var espnHomeGoals: [String: (count: Int, isOwnGoal: Bool)] = [:]
-                var espnAwayGoals: [String: (count: Int, isOwnGoal: Bool)] = [:]
+                // Collect scoring plays in order per ESPN side. Own goals (csc) stay
+                // flagged so they can be labelled as such.
+                typealias Play = (name: String, isOwnGoal: Bool, hint: Bool)
+                var homePlays: [Play] = []
+                var awayPlays: [Play] = []
                 for detail in details {
                     guard detail.scoringPlay == true,
                           let athlete = detail.athletesInvolved?.first,
                           let teamRef = detail.team else { continue }
                     let name = athlete.displayName
-                    let isOwnGoal = detail.ownGoal == true
-                        || detail.type.text.lowercased().contains("own goal")
+                    let typeText = detail.type.text.lowercased()
+                    let isOwnGoal = detail.ownGoal == true || typeText.contains("own goal")
+                    let hint = typeText.contains("shootout") || typeText.contains("shoot-out")
                     if teamRef.id == h.team.id {
-                        espnHomeGoals[name, default: (0, isOwnGoal)].count += 1
+                        homePlays.append((name, isOwnGoal, hint))
                     } else if teamRef.id == a.team.id {
-                        espnAwayGoals[name, default: (0, isOwnGoal)].count += 1
+                        awayPlays.append((name, isOwnGoal, hint))
                     }
                 }
+
+                // Classify which plays were penalty-shootout kicks. ESPN's shootoutScore
+                // is the authority for how many; the kicks are the trailing scoring
+                // plays (they happen after regulation + extra time). The play type text
+                // is used as a hint but ESPN doesn't always label it.
+                func aggregate(_ plays: [Play], shootoutTotal: Int)
+                    -> [String: (count: Int, shootout: Int, isOwnGoal: Bool)] {
+                    var isShootout = plays.map(\.hint)
+                    let hinted = isShootout.filter { $0 }.count
+                    if shootoutTotal > 0 && hinted != shootoutTotal {
+                        isShootout = Array(repeating: false, count: plays.count)
+                        let start = max(0, plays.count - shootoutTotal)
+                        for i in start..<plays.count { isShootout[i] = true }
+                    }
+                    var dict: [String: (count: Int, shootout: Int, isOwnGoal: Bool)] = [:]
+                    for (i, p) in plays.enumerated() {
+                        var e = dict[p.name] ?? (0, 0, p.isOwnGoal)
+                        e.count += 1
+                        if isShootout[i] { e.shootout += 1 }
+                        dict[p.name] = e
+                    }
+                    return dict
+                }
+
+                let espnHomeGoals = aggregate(homePlays, shootoutTotal: Int(h.shootoutScore ?? "") ?? 0)
+                let espnAwayGoals = aggregate(awayPlays, shootoutTotal: Int(a.shootoutScore ?? "") ?? 0)
                 if !espnHomeGoals.isEmpty || !espnAwayGoals.isEmpty {
                     // Re-orient onto our home/away and resolve real team names/flags
                     // (placeholders for knockout fixtures).
@@ -323,17 +378,29 @@ final class MatchStore {
                     let newHome = homeGoals.map { name, val in
                         GoalScorer(name: name, team: ourHome.name,
                                    flag: ourHome.flag, goals: val.count,
-                                   isOwnGoal: val.isOwnGoal)
+                                   isOwnGoal: val.isOwnGoal, shootoutGoals: val.shootout)
                     }
                     let newAway = awayGoals.map { name, val in
                         GoalScorer(name: name, team: ourAway.name,
                                    flag: ourAway.flag, goals: val.count,
-                                   isOwnGoal: val.isOwnGoal)
+                                   isOwnGoal: val.isOwnGoal, shootoutGoals: val.shootout)
                     }
                     if matches[idx].homeScorers != newHome || matches[idx].awayScorers != newAway {
                         matches[idx].homeScorers = newHome
                         matches[idx].awayScorers = newAway
                         anyChange = true
+                    }
+
+                    // Fallback when ESPN exposes no explicit shootoutScore: derive the
+                    // shootout result from the converted kicks listed in the details.
+                    if matches[idx].homePenalties == nil, matches[idx].awayPenalties == nil {
+                        let homePens = newHome.reduce(0) { $0 + $1.shootoutGoals }
+                        let awayPens = newAway.reduce(0) { $0 + $1.shootoutGoals }
+                        if homePens > 0 || awayPens > 0 {
+                            matches[idx].homePenalties = homePens
+                            matches[idx].awayPenalties = awayPens
+                            anyChange = true
+                        }
                     }
                 }
             }
@@ -476,6 +543,8 @@ final class MatchStore {
         for idx in matches.indices {
             matches[idx].homeScore = nil
             matches[idx].awayScore = nil
+            matches[idx].homePenalties = nil
+            matches[idx].awayPenalties = nil
             matches[idx].homeScorers = []
             matches[idx].awayScorers = []
         }
@@ -544,7 +613,29 @@ private struct ESPNStatusType: Decodable {
 private struct ESPNCompetitor: Decodable {
     let homeAway: String
     let score: String?
+    let shootoutScore: String?   // penalty-shootout total, present only after a shootout
     let team: ESPNTeam
+
+    enum CodingKeys: String, CodingKey {
+        case homeAway, score, shootoutScore, team
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        homeAway = try c.decode(String.self, forKey: .homeAway)
+        team = try c.decode(ESPNTeam.self, forKey: .team)
+        // ESPN sends score / shootoutScore sometimes as a string, sometimes as a
+        // number. Decode either shape so a shootout result never breaks the parse.
+        score = ESPNCompetitor.flexibleString(c, .score)
+        shootoutScore = ESPNCompetitor.flexibleString(c, .shootoutScore)
+    }
+
+    private static func flexibleString(_ c: KeyedDecodingContainer<CodingKeys>,
+                                       _ key: CodingKeys) -> String? {
+        if let s = try? c.decode(String.self, forKey: key) { return s }
+        if let i = try? c.decode(Int.self, forKey: key) { return String(i) }
+        return nil
+    }
 }
 
 private struct ESPNTeam: Decodable {
