@@ -96,6 +96,24 @@ struct BackupView: View {
                 } footer: {
                     Text("Remplace toutes les données actuelles par celles de la sauvegarde sélectionnée.")
                 }
+
+                // MARK: À propos & mentions légales
+                Section {
+                    externalLink("Site web", systemImage: "globe",
+                                 path: "")
+                    externalLink("À propos", systemImage: "info.circle",
+                                 path: "about.html")
+                    externalLink("Politique de confidentialité", systemImage: "hand.raised",
+                                 path: "privacy.html")
+                    externalLink("Conditions d'utilisation", systemImage: "doc.text",
+                                 path: "terms.html")
+                    externalLink("Support & contact", systemImage: "envelope",
+                                 path: "support.html")
+                } header: {
+                    Text("À propos")
+                } footer: {
+                    Text("FOOT2026 v\(appVersion) — application indépendante et non officielle. Données fournies à titre informatif.")
+                }
             }
             .listStyle(.insetGrouped)
             .navigationTitle("Réglages")
@@ -192,6 +210,36 @@ struct BackupView: View {
 
         } catch {
             showAlert(title: "Erreur d'importation", message: error.localizedDescription)
+        }
+    }
+
+    // MARK: - About / legal
+
+    /// Base URL of the public website (GitHub Pages).
+    private static let siteBaseURL = "https://boboul-cloud.github.io/FOOT2026/"
+
+    /// App version + build, e.g. "1.0 (1)".
+    private var appVersion: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
+    /// Row opening a page of the public website in the browser.
+    @ViewBuilder
+    private func externalLink(_ title: String, systemImage: String, path: String) -> some View {
+        if let url = URL(string: Self.siteBaseURL + path) {
+            Link(destination: url) {
+                HStack {
+                    Label(title, systemImage: systemImage)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .tint(.primary)
         }
     }
 
