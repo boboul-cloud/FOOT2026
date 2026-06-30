@@ -264,20 +264,66 @@ struct BracketView: View {
                 }
             }
         }
+        // Among teams not yet at the selected stage, those that still have an
+        // unplayed match feeding into it are "en cours" rather than eliminated:
+        // their fate just isn't decided yet. We keep each team's earliest such
+        // upcoming match to show its date.
+        let selIndex = stageIndex(selectedStage)
+        var pendingMatchByTeam: [String: Match] = [:]
+        for match in store.matches
+        where !match.hasScore
+            && match.stage != .thirdPlace
+            && stageIndex(match.stage) < selIndex {
+            let home = store.resolveTeam(match.homeTeam)
+            let away = store.resolveTeam(match.awayTeam)
+            for resolved in [home, away] {
+                guard resolved.flag != "🏳️",
+                      startingFlags[resolved.name] != nil,
+                      !qualifiedNames.contains(resolved.name) else { continue }
+                if let existing = pendingMatchByTeam[resolved.name], existing.date <= match.date { continue }
+                pendingMatchByTeam[resolved.name] = match
+            }
+        }
+
         let qualified = startingFlags
             .filter { qualifiedNames.contains($0.key) }
             .map { ConfTeam(name: $0.key, flag: $0.value) }
             .sorted { $0.name < $1.name }
+        let pending = startingFlags
+            .filter { !qualifiedNames.contains($0.key) && pendingMatchByTeam[$0.key] != nil }
+            .map { (name, flag) -> ConfTeamPending in
+                let match = pendingMatchByTeam[name]!
+                let home = store.resolveTeam(match.homeTeam).name
+                let away = store.resolveTeam(match.awayTeam).name
+                let opponent = home == name ? away : home
+                return ConfTeamPending(name: name, flag: flag, opponent: opponent, date: match.date)
+            }
+            .sorted { $0.date < $1.date }
         let eliminated = startingFlags
-            .filter { !qualifiedNames.contains($0.key) }
+            .filter { !qualifiedNames.contains($0.key) && pendingMatchByTeam[$0.key] == nil }
             .map { ConfTeam(name: $0.key, flag: $0.value) }
             .sorted { $0.name < $1.name }
         return ConfederationSelection(
             conf: conf,
             stageName: stageShortName(selectedStage),
             qualified: qualified,
+            pending: pending,
             eliminated: eliminated
         )
+    }
+
+    /// Knockout progression rank used to compare stages (3rd-place sits off the
+    /// main path and shares the final's rank).
+    private func stageIndex(_ stage: Stage) -> Int {
+        switch stage {
+        case .groupStage:   return 0
+        case .roundOf32:    return 1
+        case .roundOf16:    return 2
+        case .quarterFinal: return 3
+        case .semiFinal:    return 4
+        case .thirdPlace:   return 5
+        case .final_:       return 5
+        }
     }
 
     private var continentBar: some View {
@@ -545,12 +591,31 @@ struct ConfTeam: Identifiable {
     let flag: String
 }
 
-/// Selection payload for the qualified / eliminated breakdown of one confederation.
+/// A team still in the running whose match deciding this stage isn't played yet.
+struct ConfTeamPending: Identifiable {
+    let id = UUID()
+    let name: String
+    let flag: String
+    let opponent: String
+    let date: Date
+
+    /// Compact "lun. 6 juil. · 22:00" label in Paris time.
+    var dateLabel: String {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "fr_FR")
+        fmt.timeZone = TimeZone(identifier: "Europe/Paris")
+        fmt.dateFormat = "EEE d MMM · HH:mm"
+        return fmt.string(from: date).capitalized
+    }
+}
+
+/// Selection payload for the qualified / in-progress / eliminated breakdown of one confederation.
 struct ConfederationSelection: Identifiable {
     var id: String { conf.rawValue }
     let conf: Confederation
     let stageName: String
     let qualified: [ConfTeam]
+    let pending: [ConfTeamPending]
     let eliminated: [ConfTeam]
 }
 
@@ -574,6 +639,19 @@ struct ConfederationTeamsView: View {
                 } header: {
                     Label("Qualifiés (\(selection.qualified.count))", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                }
+
+                if !selection.pending.isEmpty {
+                    Section {
+                        ForEach(selection.pending) { team in
+                            pendingRow(team)
+                        }
+                    } header: {
+                        Label("En cours (\(selection.pending.count))", systemImage: "clock.fill")
+                            .foregroundStyle(.orange)
+                    } footer: {
+                        Text("Équipes dont le match décisif n'est pas encore joué.")
+                    }
                 }
 
                 Section {
@@ -611,6 +689,30 @@ struct ConfederationTeamsView: View {
             Spacer()
             Image(systemName: qualified ? "checkmark.circle.fill" : "xmark.circle.fill")
                 .foregroundStyle(qualified ? .green : .red)
+                .font(.caption)
+        }
+    }
+
+    @ViewBuilder
+    private func pendingRow(_ team: ConfTeamPending) -> some View {
+        HStack(spacing: 12) {
+            Text(team.flag)
+                .font(.title2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(team.name)
+                    .font(.body)
+                HStack(spacing: 4) {
+                    Text("vs \(team.opponent)")
+                        .lineLimit(1)
+                    Text("·")
+                    Text(team.dateLabel)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Image(systemName: "clock.fill")
+                .foregroundStyle(.orange)
                 .font(.caption)
         }
     }
