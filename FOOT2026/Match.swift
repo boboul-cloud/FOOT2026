@@ -114,6 +114,20 @@ struct Match: Identifiable, Codable {
     var matchLink: String? = nil
     var sofascoreLink: String? = nil
     var lineup: LineupData? = nil
+    /// User-edited broadcaster list. `nil` means "use the default schedule" (see `broadcasters`).
+    var customBroadcasters: [String]? = nil
+    /// User-corrected kickoff date/time. `nil` means "use the official calendar" (`date`).
+    /// When set, it is applied onto `date` at load time so the whole app (sorting,
+    /// display, notifications) follows the corrected time.
+    var customDate: Date? = nil
+
+    /// True when the user has overridden the official kickoff date/time.
+    var isDateCustomized: Bool { customDate != nil }
+
+    /// Official (calendar) kickoff time for this match, ignoring any user correction.
+    var defaultDate: Date {
+        Match.allMatches.first { $0.id == id }?.date ?? date
+    }
 
     var hasScore: Bool { homeScore != nil && awayScore != nil }
 
@@ -161,10 +175,16 @@ struct Match: Identifiable, Codable {
         return "\(h) - \(a)"
     }
 
-    /// French broadcasters for this match.
+    /// Broadcasters shown for this match. Returns the user-edited list when set,
+    /// otherwise the default French TV schedule (`defaultBroadcasters`).
+    var broadcasters: [String] {
+        customBroadcasters ?? defaultBroadcasters
+    }
+
+    /// Default French broadcasters for this match.
     /// - beIN Sports broadcasts all 104 matches (pay TV).
     /// - M6 broadcasts 54 selected matches free-to-air (source: official schedule, "+" marker).
-    var broadcasters: [String] {
+    var defaultBroadcasters: [String] {
         var result: [String] = []
         if let n = matchNumber, Match.m6MatchNumbers.contains(n) {
             result.append("M6")
@@ -224,6 +244,7 @@ struct Match: Identifiable, Codable {
         77, // 1er Gr.I - 3e (C/D/F/G/H)
         78, // 2e Gr.E - 2e Gr.I
         80, // 1er Gr.L - 3e (E/H/I/J/K)
+        82, // 1er Gr.G - 3e (A/E/H/I/J)
         84, // 1er Gr.H - 2e Gr.J
         88, // 2e Gr.D - 2e Gr.G
         // ── Huitièmes de finale ──
@@ -541,7 +562,7 @@ extension Match {
               date:parisDate(day:1,month:7,year:2026,hour:18,minute:0),
               venue:"Mercedes-Benz Stadium",  city:"Atlanta",       stage:.roundOf32),
         Match(id:mID(82),  homeTeam:"1er Gr.G",        awayTeam:"3e (A/E/H/I/J)",   homeFlag:"🏳️",awayFlag:"🏳️",
-              date:parisDate(day:1,month:7,year:2026,hour:21,minute:0),
+              date:parisDate(day:1,month:7,year:2026,hour:22,minute:0),
               venue:"Lumen Field",            city:"Seattle",       stage:.roundOf32),
         Match(id:mID(81),  homeTeam:"1er Gr.D",        awayTeam:"3e (B/E/F/I/J)",   homeFlag:"🏳️",awayFlag:"🏳️",
               date:parisDate(day:2,month:7,year:2026,hour:0,minute:0),

@@ -19,6 +19,8 @@ struct ScoreEntryView: View {
     @State private var homeScorers: [GoalScorer] = []
     @State private var awayScorers: [GoalScorer] = []
     @State private var matchLink: String = ""
+    @State private var broadcasters: [String] = []
+    @State private var kickoff: Date = Date()
     @State private var showStandings    = false
     @State private var showLineupImport = false
     @State private var showLineupDetail = false
@@ -49,7 +51,8 @@ struct ScoreEntryView: View {
                     .padding(.vertical, 4)
 
                     VStack(spacing: 2) {
-                        Text("\(match.parisDate)  ·  \(match.parisTime)")
+                        let display = currentMatch ?? match
+                        Text("\(display.parisDate)  ·  \(display.parisTime)")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         Text("\(match.venue), \(match.city)")
@@ -132,6 +135,12 @@ struct ScoreEntryView: View {
                 } header: {
                     Text("Lien")
                 }
+
+                // Date & kickoff time
+                scheduleSection
+
+                // Broadcasters
+                broadcastersSection
 
                 // Composition
                 Section {
@@ -232,6 +241,8 @@ struct ScoreEntryView: View {
                 homeScorers = match.homeScorers
                 awayScorers = match.awayScorers
                 matchLink = match.matchLink ?? ""
+                broadcasters = match.broadcasters
+                kickoff = (currentMatch ?? match).date
                 if let p = predictions.prediction(for: match.id) {
                     predHomeText = "\(p.home)"
                     predAwayText = "\(p.away)"
@@ -321,6 +332,97 @@ struct ScoreEntryView: View {
         case .wrong:   return .red
         case .pending: return .secondary
         }
+    }
+
+    // MARK: - Schedule (date & kickoff time) section
+
+    @ViewBuilder
+    private var scheduleSection: some View {
+        Section {
+            DatePicker(
+                "Coup d'envoi",
+                selection: $kickoff,
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .environment(\.timeZone, TimeZone(identifier: "Europe/Paris")!)
+            .environment(\.locale, Locale(identifier: "fr_FR"))
+
+            if kickoff != match.defaultDate {
+                Button {
+                    kickoff = match.defaultDate
+                } label: {
+                    Label("Rétablir l'horaire officiel", systemImage: "arrow.counterclockwise")
+                        .font(.footnote)
+                }
+                .tint(.secondary)
+            }
+        } header: {
+            Text("Date et heure de diffusion")
+        } footer: {
+            Text("Corrigez la date ou l'heure du match si le calendrier officiel a changé (fuseau de Paris).")
+        }
+        .onChange(of: kickoff) { persistDate() }
+    }
+
+    /// Persists the kickoff correction on its own — independent of the score. Stores
+    /// the override only when it differs from the official calendar time, so unedited
+    /// matches keep following the built-in schedule.
+    private func persistDate() {
+        store.updateDate(matchID: match.id,
+                         date: kickoff == match.defaultDate ? nil : kickoff)
+    }
+
+    // MARK: - Broadcasters section
+
+    @ViewBuilder
+    private var broadcastersSection: some View {
+        Section {
+            ForEach(broadcasters.indices, id: \.self) { i in
+                HStack(spacing: 10) {
+                    Image(systemName: "tv")
+                        .foregroundStyle(.secondary)
+                    TextField("Nom de la chaîne", text: $broadcasters[i])
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .onDelete { offsets in
+                broadcasters.remove(atOffsets: offsets)
+            }
+
+            Button {
+                broadcasters.append("")
+            } label: {
+                Label("Ajouter un diffuseur", systemImage: "plus.circle.fill")
+            }
+            .tint(.blue)
+
+            if broadcasters != match.defaultBroadcasters {
+                Button {
+                    broadcasters = match.defaultBroadcasters
+                } label: {
+                    Label("Rétablir les diffuseurs par défaut", systemImage: "arrow.counterclockwise")
+                        .font(.footnote)
+                }
+                .tint(.secondary)
+            }
+        } header: {
+            Text("Diffuseurs")
+        } footer: {
+            Text("Chaînes qui diffusent ce match (ex. M6, beIN Sports). Balayez vers la gauche pour supprimer.")
+        }
+        .onChange(of: broadcasters) { persistBroadcasters() }
+    }
+
+    /// Persists the broadcaster list on its own — independent of the score, whose
+    /// "Enregistrer" button is disabled until a valid score is entered. Stores the
+    /// custom list only when it differs from the default schedule, so unedited
+    /// matches keep following the built-in calendar.
+    private func persistBroadcasters() {
+        let clean = broadcasters
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        store.updateBroadcasters(matchID: match.id,
+                                 broadcasters: clean == match.defaultBroadcasters ? nil : clean)
     }
 
     // MARK: - Scorers section
@@ -420,6 +522,8 @@ struct ScoreEntryView: View {
             .map { var s = $0; s.shootoutGoals = min(s.shootoutGoals, s.goals); return s }
         store.updateScorers(matchID: match.id, homeScorers: cleanHome, awayScorers: cleanAway)
         store.updateMatchLink(matchID: match.id, link: matchLink)
+        persistBroadcasters()
+        persistDate()
         dismiss()
     }
 

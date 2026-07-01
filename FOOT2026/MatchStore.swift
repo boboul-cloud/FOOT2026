@@ -99,6 +99,11 @@ final class MatchStore {
                     m.matchLink = saved.matchLink
                     m.sofascoreLink = saved.sofascoreLink
                     m.lineup = saved.lineup
+                    m.customBroadcasters = saved.customBroadcasters
+                    // Apply the corrected kickoff time onto the canonical date so the
+                    // whole app (sorting, display) follows the user's correction.
+                    m.customDate = saved.customDate
+                    if let corrected = saved.customDate { m.date = corrected }
                     return m
                 }
                 return fixture
@@ -164,6 +169,23 @@ final class MatchStore {
     func updateLineup(_ lineup: LineupData, matchID: UUID) {
         guard let idx = matches.firstIndex(where: { $0.id == matchID }) else { return }
         matches[idx].lineup = lineup
+        save()
+    }
+
+    /// Sets the broadcaster list for a match. Pass `nil` to restore the default schedule.
+    func updateBroadcasters(matchID: UUID, broadcasters: [String]?) {
+        guard let idx = matches.firstIndex(where: { $0.id == matchID }) else { return }
+        matches[idx].customBroadcasters = broadcasters
+        save()
+    }
+
+    /// Overrides the kickoff date/time for a match. Pass `nil` to restore the
+    /// official calendar time. The corrected time is applied onto `date` so the
+    /// whole app (sorting, display) follows it immediately.
+    func updateDate(matchID: UUID, date: Date?) {
+        guard let idx = matches.firstIndex(where: { $0.id == matchID }) else { return }
+        matches[idx].customDate = date
+        matches[idx].date = date ?? matches[idx].defaultDate
         save()
     }
 
