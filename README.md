@@ -1,6 +1,6 @@
 # FOOT2026 ⚽
 
-Application iOS indépendante pour suivre la **Coupe du Monde de football 2026** : calendrier des 104 matchs, scores, classements des groupes, tableau à élimination directe et pronostics personnels.
+Application iOS indépendante pour suivre le **tournoi de football 2026** : calendrier des 104 matchs, scores, classements des groupes, tableau à élimination directe et pronostics personnels.
 
 > Application **non officielle**, sans aucun lien avec la FIFA ni les organisateurs du tournoi.
 

@@ -74,7 +74,7 @@ struct MatchesView: View {
                 .padding(.vertical, 8)
                 .background(Color(.secondarySystemGroupedBackground))
             }
-            .navigationTitle("Coupe du Monde 2026")
+            .navigationTitle("Foot 2026")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Chercher une équipe…")
             .toolbar {

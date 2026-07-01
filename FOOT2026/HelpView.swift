@@ -25,7 +25,7 @@ struct HelpView: View {
 
     private var introSection: some View {
         Section {
-            Text("Suivez la Coupe du Monde 2026 : 48 équipes, 12 groupes de 4, puis une phase finale à élimination directe de 32 équipes.")
+            Text("Suivez le tournoi de football 2026 : 48 équipes, 12 groupes de 4, puis une phase finale à élimination directe de 32 équipes.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
         }
@@ -89,7 +89,7 @@ struct HelpView: View {
         Section {
             Text("Les 12 troisièmes sont d'abord classés entre eux (mêmes critères que les groupes). Seuls les **8 meilleurs** sont retenus.")
                 .font(.subheadline)
-            Text("Leur place dans le tableau dépend ensuite des groupes d'où ils sortent : la FIFA utilise une table officielle qui, selon la combinaison des 8 groupes qualifiés, affecte chaque troisième à un 16e de finale précis. L'application applique cette table automatiquement.")
+            Text("Leur place dans le tableau dépend ensuite des groupes d'où ils sortent : une table officielle détermine, selon la combinaison des 8 groupes qualifiés, à quel 16e de finale chaque troisième est affecté. L'application applique cette table automatiquement.")
                 .font(.subheadline)
             Text("Tant qu'un résultat manque, l'équipe apparaît sous forme d'emplacement (ex. « 1er Gr.A », « 3e (A/B/C/D/F) », ou « Vainqueur M73 ») et se résout dès que possible.")
                 .font(.caption)
@@ -99,10 +99,10 @@ struct HelpView: View {
         }
     }
 
-    // MARK: - Deep dive (FIFA dispatch table)
+    // MARK: - Deep dive (dispatch table)
 
     /// The 8 Round-of-32 matches that receive a third-placed team, each with the
-    /// set of groups eligible to fill it (official FIFA dispatch table).
+    /// set of groups eligible to fill it (official dispatch table).
     private let thirdPlaceSlots: [(match: String, groups: String)] = [
         ("M74", "A / B / C / D / F"),
         ("M77", "C / D / F / G / H"),
@@ -118,7 +118,7 @@ struct HelpView: View {
         Section {
             DisclosureGroup(isExpanded: $deepDiveExpanded) {
                 VStack(alignment: .leading, spacing: 14) {
-                    Text("Le tableau est figé dès le tirage (pour le calendrier et la billetterie), mais on ignore à l'avance lesquels des 12 troisièmes finiront dans le top 8. La FIFA publie donc une table qui couvre les **495 combinaisons** possibles de groupes qualifiés et affecte, pour chacune, chaque troisième à un match précis.")
+                    Text("Le tableau est figé dès le tirage (pour le calendrier et la billetterie), mais on ignore à l'avance lesquels des 12 troisièmes finiront dans le top 8. Une table officielle couvre donc les **495 combinaisons** possibles de groupes qualifiés et affecte, pour chacune, chaque troisième à un match précis.")
                         .font(.caption)
 
                     Text("Seuls 8 des 32 matchs accueillent un troisième. Chacun n'accepte un troisième que d'un sous-ensemble de groupes — ce qui évite qu'une équipe retombe contre le 1er ou le 2e de son propre groupe :")
@@ -148,11 +148,11 @@ struct HelpView: View {
                 }
                 .padding(.top, 4)
             } label: {
-                Label("Pour aller plus loin : la table FIFA", systemImage: "table")
+                Label("Pour aller plus loin : la table de répartition", systemImage: "table")
                     .font(.subheadline.bold())
             }
         } footer: {
-            Text("Note : le départage des égalités dans l'application s'arrête à l'ordre alphabétique. La FIFA utilise en plus les confrontations directes, le fair-play puis un tirage au sort.")
+            Text("Note : le départage des égalités dans l'application s'arrête à l'ordre alphabétique. Le règlement officiel utilise en plus les confrontations directes, le fair-play puis un tirage au sort.")
         }
     }
 
