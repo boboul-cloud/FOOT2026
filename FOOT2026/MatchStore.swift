@@ -4,8 +4,8 @@
 
 import SwiftUI
 
-// FIFA World Ranking – June 11, 2026 (official)
-let fifaRankings: [String: Int] = [
+// World ranking – June 11, 2026
+let worldRankings: [String: Int] = [
     "Argentine":           1,
     "Espagne":             2,
     "France":              3,

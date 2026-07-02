@@ -1,6 +1,6 @@
 // ThirdPlaceTable.swift
-// FOOT2026 — Official FIFA 2026 third-place dispatch table (Annex C)
-// Auto-generated from Wikipedia / FIFA regulations
+// FOOT2026 — 2026 third-place dispatch table (Annex C)
+// Auto-generated from public tournament regulations
 // Key = 8 qualifying group letters sorted, Value = [slotKey: assignedGroup]
 //
 // Slot keys → match:

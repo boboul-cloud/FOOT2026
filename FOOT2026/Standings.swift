@@ -64,7 +64,7 @@ extension MatchStore {
         return rankGroup(Array(stats.values), matches: groupMatches)
     }
 
-    /// Overall comparison predicate (FIFA criteria 1–3): Points > DB > BM,
+    /// Overall comparison predicate (criteria 1–3): Points > DB > BM,
     /// then alphabetical as a stable fallback.
     /// Used directly for cross-group rankings (e.g. the best third-placed teams,
     /// who never meet in the group stage so head-to-head doesn't apply).
@@ -75,7 +75,7 @@ extension MatchStore {
         return a.team < b.team
     }
 
-    /// FIFA World Cup group ranking:
+    /// Group ranking:
     ///   1. points (all matches)  2. goal difference (all)  3. goals scored (all)
     /// then, between teams still level, the head-to-head sub-table among them:
     ///   4. points  5. goal difference  6. goals scored (matches between them only)
@@ -105,7 +105,7 @@ extension MatchStore {
     }
 
     /// Re-orders teams tied on the overall criteria using only the matches
-    /// played between them (the FIFA head-to-head sub-table).
+    /// played between them (the head-to-head sub-table).
     private func breakTie(_ tied: [TeamStanding], matches: [Match]) -> [TeamStanding] {
         let names = Set(tied.map(\.team))
         var pts = [String: Int](), gd = [String: Int](), gf = [String: Int]()

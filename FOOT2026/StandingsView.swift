@@ -127,14 +127,14 @@ struct StandingsView: View {
             positionBadge(position)
                 .frame(width: 24)
 
-            // Flag + name + FIFA rank
+            // Flag + name + world rank
             HStack(spacing: 5) {
                 Text(s.flag).font(.body)
                 Text(s.team)
                     .font(.caption.bold())
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                if let rank = fifaRankings[s.team] {
+                if let rank = worldRankings[s.team] {
                     Text("\(rank)")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.secondary)

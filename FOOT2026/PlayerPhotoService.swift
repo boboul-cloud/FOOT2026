@@ -280,7 +280,7 @@ struct RemotePlayerPhoto<Placeholder: View>: View {
 
     var body: some View {
         // Note: `Group` is qualified because the app defines its own `enum Group`
-        // (World Cup groups A–L), which would otherwise shadow SwiftUI.Group.
+        // (tournament groups A–L), which would otherwise shadow SwiftUI.Group.
         SwiftUI.Group {
             if let image {
                 Image(uiImage: image)

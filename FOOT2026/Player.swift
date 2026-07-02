@@ -1,6 +1,6 @@
 // Player.swift
 // FOOT2026
-// Player model and World Cup 2026 squad data (~23–26 players per team)
+// Player model and 2026 squad data (~23–26 players per team)
 
 import Foundation
 

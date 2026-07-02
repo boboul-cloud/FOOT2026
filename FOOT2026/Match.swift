@@ -1,6 +1,6 @@
 // Match.swift
 // FOOT2026
-// Official FIFA World Cup 2026 fixture data – source: Wikipedia / FIFA
+// 2026 tournament fixture data – source: public schedules
 
 import Foundation
 
@@ -201,7 +201,7 @@ struct Match: Identifiable, Codable {
     }
 
     /// Exhaustive set of match numbers broadcast on M6 (free-to-air).
-    /// Source: official FIFA World Cup 2026 calendar – "+" marker.
+    /// Source: official 2026 tournament calendar – "+" marker.
     private static let m6MatchNumbers: Set<Int> = [
         // ── Phase de groupes ──
         1,  // Mexique - Afrique du Sud (match d'ouverture)
@@ -275,7 +275,7 @@ struct Match: Identifiable, Codable {
     }
 }
 
-// MARK: - Fixture Data (source: Wikipedia / FIFA)
+// MARK: - Fixture Data (source: public schedules)
 
 extension Match {
 

@@ -1,5 +1,5 @@
 // FOOT2026Tests.swift
-// Unit tests for the tournament logic: FIFA group ranking (incl. head-to-head),
+// Unit tests for the tournament logic: group ranking (incl. head-to-head),
 // the third-place dispatch table, and prediction scoring.
 
 import XCTest
